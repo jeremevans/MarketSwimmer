@@ -1,0 +1,42 @@
+# MarketSwimmer .gitignore
+
+# Generated Data Files
+data/*.csv
+charts/*.png
+downloaded_files/*.xlsx
+
+# Log Files
+logs/*.log
+
+# Python Cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE Files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary Files
+*.tmp
+*.temp
+~$*.xlsx
+~$*.xls
+
+# Environment Variables
+.env
+.env.local

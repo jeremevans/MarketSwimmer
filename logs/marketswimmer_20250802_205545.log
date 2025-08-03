@@ -1,8 +1,0 @@
-2025-08-02 20:55:45,953 | MarketSwimmer |     INFO | logger_config.py:62 | setup_logger() | ================================================================================
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:63 | setup_logger() | MarketSwimmer Logger Initialized
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:64 | setup_logger() | Log file: logs\marketswimmer_20250802_205545.log
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:65 | setup_logger() | Process ID: 20584
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:66 | setup_logger() | Working directory: C:\Users\jerem\local\MarketSwimmer
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:67 | setup_logger() | Python executable: C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:68 | setup_logger() | Command line: -c
-2025-08-02 20:55:45,957 | MarketSwimmer |     INFO | logger_config.py:69 | setup_logger() | ================================================================================
