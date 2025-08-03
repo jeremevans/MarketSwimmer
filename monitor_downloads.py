@@ -9,7 +9,12 @@ def get_default_download_folder():
     """
     Get the default download folder for the current user.
     
-    Returns:
+    Re    print("[HELP] Usage examples:")
+    print("  python monitor_downloads.py          # Continuous monitoring")
+    print("  python monitor_downloads.py --check  # One-time check")
+
+if __name__ == "__main__":
+    main()
         str: Path to the default download folder
     """
     # For Windows, the default download folder is usually in the user's profile
@@ -95,11 +100,11 @@ def copy_file_to_local(source_path, local_dir="./downloaded_files"):
         # Copy the file
         shutil.copy2(source_path, destination_path)
         
-        print(f"✅ Copied: {filename} -> {destination_path}")
+        print(f"[OK] Copied: {filename} -> {destination_path}")
         return destination_path
         
     except Exception as e:
-        print(f"❌ Error copying file {source_path}: {e}")
+        print(f"[ERROR] Error copying file {source_path}: {e}")
         return None
 
 def monitor_downloads(check_interval=10, max_checks=60):
@@ -113,12 +118,12 @@ def monitor_downloads(check_interval=10, max_checks=60):
     download_folder = get_default_download_folder()
     
     if not download_folder:
-        print("❌ Could not find default download folder!")
+        print("[ERROR] Could not find default download folder!")
         return
     
-    print(f"📁 Monitoring download folder: {download_folder}")
-    print(f"🔄 Checking every {check_interval} seconds for new XLSX files...")
-    print(f"⏱️  Will monitor for {max_checks * check_interval} seconds total")
+    print(f"[FOLDER] Monitoring download folder: {download_folder}")
+    print(f"[CHECK] Checking every {check_interval} seconds for new XLSX files...")
+    print(f"[TIME] Will monitor for {max_checks * check_interval} seconds total")
     print("Press Ctrl+C to stop monitoring\n")
     
     local_dir = "./downloaded_files"
@@ -138,22 +143,22 @@ def monitor_downloads(check_interval=10, max_checks=60):
                     copied_files.add(file_id)
             
             if new_files:
-                print(f"🆕 Found {len(new_files)} new XLSX file(s):")
+                print(f"[NEW] Found {len(new_files)} new XLSX file(s):")
                 for file_path in new_files:
                     copied_path = copy_file_to_local(file_path, local_dir)
                     if copied_path:
-                        print(f"   📋 Size: {os.path.getsize(file_path)} bytes")
+                        print(f"   [SIZE] Size: {os.path.getsize(file_path)} bytes")
                 print()
             else:
                 if check_num % 6 == 0:  # Print status every minute
-                    print(f"⏳ Still monitoring... ({check_num + 1}/{max_checks})")
+                    print(f"[WAIT] Still monitoring... ({check_num + 1}/{max_checks})")
             
             time.sleep(check_interval)
             
     except KeyboardInterrupt:
-        print("\n🛑 Monitoring stopped by user")
+        print("\n[STOP] Monitoring stopped by user")
     
-    print(f"\n📊 Monitoring complete. Local files saved to: {os.path.abspath(local_dir)}")
+    print(f"\n[DONE] Monitoring complete. Local files saved to: {os.path.abspath(local_dir)}")
 
 def check_recent_downloads():
     """
@@ -162,26 +167,26 @@ def check_recent_downloads():
     download_folder = get_default_download_folder()
     
     if not download_folder:
-        print("❌ Could not find default download folder!")
+        print("[ERROR] Could not find default download folder!")
         return
     
-    print(f"📁 Checking download folder: {download_folder}")
+    print(f"[FOLDER] Checking download folder: {download_folder}")
     recent_files = find_recent_xlsx_files(download_folder, minutes_back=10)
     
     if recent_files:
-        print(f"🆕 Found {len(recent_files)} recent XLSX file(s):")
+        print(f"[NEW] Found {len(recent_files)} recent XLSX file(s):")
         local_dir = "./downloaded_files"
         
         for file_path in recent_files:
             file_size = os.path.getsize(file_path)
             mod_time = time.ctime(os.path.getmtime(file_path))
-            print(f"   📄 {os.path.basename(file_path)} ({file_size} bytes, modified: {mod_time})")
+            print(f"   [FILE] {os.path.basename(file_path)} ({file_size} bytes, modified: {mod_time})")
             
             copied_path = copy_file_to_local(file_path, local_dir)
         
-        print(f"\n📊 Files copied to: {os.path.abspath(local_dir)}")
+        print(f"\n[DONE] Files copied to: {os.path.abspath(local_dir)}")
     else:
-        print("📭 No recent XLSX files found in downloads folder")
+        print("[EMPTY] No recent XLSX files found in downloads folder")
 
 def main():
     """
@@ -206,7 +211,7 @@ def main():
         else:
             monitor_downloads()
     
-    print("\n📖 Usage examples:")
+    print("\n[HELP] Usage examples:")
     print("  python monitor_downloads.py          # Continuous monitoring")
     print("  python monitor_downloads.py --check  # One-time check")
 

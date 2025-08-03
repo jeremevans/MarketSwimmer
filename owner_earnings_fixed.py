@@ -33,7 +33,7 @@ class OwnerEarningsCalculator:
             # Get all sheet names
             xl_file = pd.ExcelFile(self.file_path)
             sheet_names = xl_file.sheet_names
-            print(f"[SHEETS] Available sheets: {sheet_names}")
+            print(f"[INFO] Available sheets: {sheet_names}")
             
             # Try to identify sheets by common names - prefer Annual (A) over Quarterly (Q)
             # Look for annual data first, then fall back to quarterly
@@ -55,21 +55,21 @@ class OwnerEarningsCalculator:
                 print(f"[OK] Loaded Income Statement: {income_sheet}")
                 print(f"   [DATA] Shape: {self.income_statement.shape}")
                 data_type = "Annual" if ", A" in income_sheet else "Quarterly" if ", Q" in income_sheet else "Unknown"
-                print(f"   [TYPE] Data type: {data_type}")
+                print(f"   [DATE] Data type: {data_type}")
             
             if balance_sheet:
                 self.balance_sheet = pd.read_excel(self.file_path, sheet_name=balance_sheet)
                 print(f"[OK] Loaded Balance Sheet: {balance_sheet}")
                 print(f"   [DATA] Shape: {self.balance_sheet.shape}")
                 data_type = "Annual" if ", A" in balance_sheet else "Quarterly" if ", Q" in balance_sheet else "Unknown"
-                print(f"   [TYPE] Data type: {data_type}")
+                print(f"   [DATE] Data type: {data_type}")
             
             if cashflow_sheet:
                 self.cash_flow = pd.read_excel(self.file_path, sheet_name=cashflow_sheet)
                 print(f"[OK] Loaded Cash Flow Statement: {cashflow_sheet}")
                 print(f"   [DATA] Shape: {self.cash_flow.shape}")
                 data_type = "Annual" if ", A" in cashflow_sheet else "Quarterly" if ", Q" in cashflow_sheet else "Unknown"
-                print(f"   [TYPE] Data type: {data_type}")
+                print(f"   [DATE] Data type: {data_type}")
             
             return True
             
@@ -152,10 +152,10 @@ class OwnerEarningsCalculator:
     
     def debug_financial_data(self):
         """Print available financial line items for debugging."""
-        print(f"\n[DEBUG] DEBUG: Available financial line items...")
+        print(f"\n[SEARCH] DEBUG: Available financial line items...")
         
         if self.income_statement is not None:
-            print(f"\n[INCOME] INCOME STATEMENT ({self.income_statement.shape}):")
+            print(f"\n[DATA] INCOME STATEMENT ({self.income_statement.shape}):")
             print(f"   Columns: {list(self.income_statement.columns)}")
             print(f"   First few rows of first column:")
             try:
@@ -167,7 +167,7 @@ class OwnerEarningsCalculator:
                 print(f"   Error reading income statement: {e}")
         
         if self.cash_flow is not None:
-            print(f"\n[CASH] CASH FLOW STATEMENT ({self.cash_flow.shape}):")
+            print(f"\n[MONEY] CASH FLOW STATEMENT ({self.cash_flow.shape}):")
             print(f"   Columns: {list(self.cash_flow.columns)}")
             print(f"   First few rows of first column:")
             try:
@@ -179,7 +179,7 @@ class OwnerEarningsCalculator:
                 print(f"   Error reading cash flow: {e}")
         
         if self.balance_sheet is not None:
-            print(f"\n📋 BALANCE SHEET ({self.balance_sheet.shape}):")
+            print(f"\n[INFO] BALANCE SHEET ({self.balance_sheet.shape}):")
             print(f"   Columns: {list(self.balance_sheet.columns)}")
             print(f"   First few rows of first column:")
             try:
@@ -205,7 +205,7 @@ class OwnerEarningsCalculator:
         if df is None or df.empty:
             return {}
         
-        print(f"   🔍 Searching for: {search_terms}")
+        print(f"   [SEARCH] Searching for: {search_terms}")
         
         # Try different approaches to find the data
         # Approach 1: Use first column as index
@@ -223,7 +223,7 @@ class OwnerEarningsCalculator:
             # Try exact match first
             for idx in search_df.index:
                 if pd.notna(idx) and search_term.lower() in str(idx).lower():
-                    print(f"      ✅ Found match: '{idx}'")
+                    print(f"      [OK] Found match: '{idx}'")
                     
                     # Found the row, extract recent years
                     row_data = search_df.loc[idx]
@@ -290,7 +290,7 @@ class OwnerEarningsCalculator:
                     # Sort by year (most recent first), then by quarter priority (Dec quarters first)
                     year_cols.sort(key=lambda x: (x[1], x[2]), reverse=True)
                     
-                    print(f"      📅 Found year columns: {[(f'{col}({year}-{quarter})' if len(col_data) > 3 else f'{col}({year})') for col_data in year_cols[:10] for col, year, priority, quarter in [col_data]]}")
+                    print(f"      [DATES] Found year columns: {[(f'{col}({year}-{quarter})' if len(col_data) > 3 else f'{col}({year})') for col_data in year_cols[:10] for col, year, priority, quarter in [col_data]]}")
                     
                     # Extract values for recent years/quarters
                     result = {}
@@ -335,21 +335,21 @@ class OwnerEarningsCalculator:
                                         break
                                         
                         except Exception as e:
-                            print(f"      ⚠️  Error processing {col}: {e}")
+                            print(f"      [WARNING]  Error processing {col}: {e}")
                             continue
                     
                     if result:
-                        print(f"      📈 Extracted data: {result}")
+                        print(f"      [CHART] Extracted data: {result}")
                         return result
                     else:
-                        print(f"      ❌ No valid numeric data found")
+                        print(f"      [ERROR] No valid numeric data found")
         
-        print(f"      ❌ No matches found for any search terms")
+        print(f"      [ERROR] No matches found for any search terms")
         return {}
     
     def extract_owner_earnings_components(self):
         """Extract all components needed for owner earnings calculation."""
-        print(f"\n🔍 Extracting Owner Earnings components for {self.company_name}...")
+        print(f"\n[SEARCH] Extracting Owner Earnings components for {self.company_name}...")
         
         # Determine how many periods to extract based on data type
         if hasattr(self, 'preferred_data_type') and self.preferred_data_type == 'Quarterly':
@@ -392,12 +392,12 @@ class OwnerEarningsCalculator:
         
         # Method 2: Calculate from balance sheet (more accurate)
         if not working_capital_change and self.balance_sheet is not None:
-            print(f"   💡 Calculating working capital changes from balance sheet...")
+            print(f"   [TIP] Calculating working capital changes from balance sheet...")
             working_capital_change = self._calculate_working_capital_from_balance_sheet(periods_to_extract)
         
         # Method 3: If still not found, calculate from cash flow components
         if not working_capital_change:
-            print(f"   💡 Direct working capital not found, calculating from cash flow components...")
+            print(f"   [TIP] Direct working capital not found, calculating from cash flow components...")
             
             # Get individual working capital components
             receivables_change = self._find_financial_item(self.cash_flow, 
@@ -411,7 +411,7 @@ class OwnerEarningsCalculator:
             
             # Calculate working capital change if we have the components
             if receivables_change or inventory_change or payables_change:
-                print(f"   📊 Found working capital components:")
+                print(f"   [DATA] Found working capital components:")
                 if receivables_change:
                     print(f"      • Receivables changes: {receivables_change}")
                 if inventory_change:
@@ -447,7 +447,7 @@ class OwnerEarningsCalculator:
                         components.append(f"Payables: {payables_change[year]:,.0f}")
                     
                     working_capital_change[year] = wc_change
-                    print(f"      📅 {year}: {' + '.join(components)} = ${wc_change:,.0f}")
+                    print(f"      [YEAR] {year}: {' + '.join(components)} = ${wc_change:,.0f}")
         
         # Store the components
         self.owner_earnings_data = {
@@ -464,7 +464,7 @@ class OwnerEarningsCalculator:
         Calculate working capital changes from balance sheet data.
         Working Capital = Current Assets - Current Liabilities
         """
-        print(f"   📊 Extracting working capital components from balance sheet...")
+        print(f"   [DATA] Extracting working capital components from balance sheet...")
         
         # Find current assets and current liabilities
         current_assets = self._find_financial_item(self.balance_sheet, 
@@ -474,7 +474,7 @@ class OwnerEarningsCalculator:
             ['total current liabilities', 'current liabilities'], periods_to_extract)
         
         if not current_assets and not current_liabilities:
-            print(f"   ❌ Could not find current assets or liabilities in balance sheet")
+            print(f"   [ERROR] Could not find current assets or liabilities in balance sheet")
             return {}
         
         # Calculate working capital for each year
@@ -483,11 +483,11 @@ class OwnerEarningsCalculator:
         
         if current_assets:
             all_years.update(current_assets.keys())
-            print(f"   📈 Current Assets: {current_assets}")
+            print(f"   [CHART] Current Assets: {current_assets}")
         
         if current_liabilities:
             all_years.update(current_liabilities.keys())
-            print(f"   📉 Current Liabilities: {current_liabilities}")
+            print(f"   [DECLINE] Current Liabilities: {current_liabilities}")
         
         # Calculate working capital level for each year
         for year in all_years:
@@ -495,30 +495,30 @@ class OwnerEarningsCalculator:
             liabilities = current_liabilities.get(year, 0) if current_liabilities else 0
             working_capital_levels[year] = assets - liabilities
         
-        print(f"   💰 Working Capital Levels: {working_capital_levels}")
+        print(f"   [MONEY] Working Capital Levels: {working_capital_levels}")
         
         # Also extract long-term debt to check for debt restructuring
-        print(f"\n   🔍 DEBT ANALYSIS FOR RESTRUCTURING CHECK:")
+        print(f"\n   [SEARCH] DEBT ANALYSIS FOR RESTRUCTURING CHECK:")
         debt_search_terms = ['long term debt', 'long-term debt', 'total debt', 'debt total']
         
         debt_data = None
         for search_term in debt_search_terms:
             debt_data = self._find_financial_item(self.balance_sheet, [search_term], periods_to_extract)
             if debt_data:
-                print(f"   📊 Long-term Debt Levels: {debt_data}")
+                print(f"   [DATA] Long-term Debt Levels: {debt_data}")
                 # Calculate debt changes (limit display to avoid clutter)
                 debt_periods = sorted(debt_data.keys())
                 for i in range(1, min(len(debt_periods), 8)):  # Show max 7 periods to avoid clutter
                     prev_period = debt_periods[i-1]
                     curr_period = debt_periods[i]
                     debt_change = debt_data[curr_period] - debt_data[prev_period]
-                    print(f"   💳 {curr_period}: Debt change from ${debt_data[prev_period]:,.0f} to ${debt_data[curr_period]:,.0f} = ${debt_change:,.0f}")
+                    print(f"   [CREDIT] {curr_period}: Debt change from ${debt_data[prev_period]:,.0f} to ${debt_data[curr_period]:,.0f} = ${debt_change:,.0f}")
                 break
         
         if not debt_data:
-            print("   ❌ Could not find long-term debt information")
+            print("   [ERROR] Could not find long-term debt information")
         
-        print(f"\n   📊 WORKING CAPITAL CHANGES:")
+        print(f"\n   [DATA] WORKING CAPITAL CHANGES:")
         working_capital_changes = {}
         sorted_years = sorted(working_capital_levels.keys())
         
@@ -533,7 +533,7 @@ class OwnerEarningsCalculator:
             wc_change = -(current_wc - previous_wc)  # Negative because increase uses cash
             working_capital_changes[current_year] = wc_change
             
-            print(f"   📅 {current_year}: WC change from ${previous_wc:,.0f} to ${current_wc:,.0f} = ${wc_change:,.0f}")
+            print(f"   [YEAR] {current_year}: WC change from ${previous_wc:,.0f} to ${current_wc:,.0f} = ${wc_change:,.0f}")
         
         return working_capital_changes
 
@@ -542,7 +542,7 @@ class OwnerEarningsCalculator:
         if not self.owner_earnings_data:
             self.extract_owner_earnings_components()
         
-        print(f"\n💰 Calculating Owner Earnings for {self.company_name}...")
+        print(f"\n[MONEY] Calculating Owner Earnings for {self.company_name}...")
         
         # Get all available years
         all_years = set()
@@ -573,7 +573,7 @@ class OwnerEarningsCalculator:
                 }
                 
             except Exception as e:
-                print(f"⚠️  Error calculating owner earnings for {year}: {e}")
+                print(f"[WARNING]  Error calculating owner earnings for {year}: {e}")
                 continue
         
         return owner_earnings
@@ -583,22 +583,22 @@ class OwnerEarningsCalculator:
         owner_earnings = self.calculate_owner_earnings()
         
         if not owner_earnings:
-            print("❌ No owner earnings data could be calculated.")
+            print("[ERROR] No owner earnings data could be calculated.")
             return
         
         print(f"\n" + "=" * 60)
-        print(f"📊 OWNER EARNINGS ANALYSIS - {self.company_name.upper()}")
+        print(f"[DATA] OWNER EARNINGS ANALYSIS - {self.company_name.upper()}")
         print("=" * 60)
         
-        print(f"\n💡 Owner Earnings Formula:")
+        print(f"\n[TIP] Owner Earnings Formula:")
         print(f"   Net Income + Depreciation/Amortization - CapEx - Working Capital Changes")
         
-        print(f"\n📈 DETAILED BREAKDOWN BY YEAR:")
+        print(f"\n[CHART] DETAILED BREAKDOWN BY YEAR:")
         print("-" * 60)
         
         for year in sorted(owner_earnings.keys(), reverse=True):
             data = owner_earnings[year]
-            print(f"\n📅 {year}:")
+            print(f"\n[YEAR] {year}:")
             print(f"   Net Income:           ${data['net_income']:>15,.0f}")
             print(f"   + Depreciation:       ${data['depreciation']:>15,.0f}")
             print(f"   + CapEx:              ${data['capex']:>15,.0f}")
@@ -618,13 +618,13 @@ class OwnerEarningsCalculator:
             
             if older_oe != 0:
                 growth = ((recent_oe - older_oe) / abs(older_oe)) * 100
-                print(f"\n📊 YEAR-OVER-YEAR GROWTH:")
+                print(f"\n[DATA] YEAR-OVER-YEAR GROWTH:")
                 print(f"   {years_list[1]} to {years_list[0]}: {growth:+.1f}%")
         
         # Calculate average
         oe_values = [data['owner_earnings'] for data in owner_earnings.values()]
         avg_oe = sum(oe_values) / len(oe_values)
-        print(f"\n📊 SUMMARY STATISTICS:")
+        print(f"\n[DATA] SUMMARY STATISTICS:")
         print(f"   Average Owner Earnings: ${avg_oe:,.0f}")
         print(f"   Years analyzed: {len(owner_earnings)}")
         
@@ -643,6 +643,28 @@ def find_recent_xlsx_file(directory="./downloaded_files"):
     xlsx_files.sort(key=os.path.getmtime, reverse=True)
     return xlsx_files[0]
 
+def find_ticker_xlsx_file(ticker, directory="./downloaded_files"):
+    """Find the most recent XLSX file for a specific ticker."""
+    if not os.path.exists(directory):
+        return None
+    
+    # Clean ticker (remove dots, make lowercase)
+    clean_ticker = ticker.replace('.', '').lower()
+    
+    # Look for files matching the ticker pattern
+    pattern = os.path.join(directory, f"*{clean_ticker}*.xlsx")
+    xlsx_files = glob.glob(pattern)
+    
+    if not xlsx_files:
+        print(f"[ERROR] No XLSX files found for ticker '{ticker}' in {directory}")
+        print(f"[SEARCH] Looked for pattern: *{clean_ticker}*.xlsx")
+        return None
+    
+    # Sort by modification time (most recent first) 
+    xlsx_files.sort(key=os.path.getmtime, reverse=True)
+    print(f"[FOUND] Using ticker-specific file: {os.path.basename(xlsx_files[0])}")
+    return xlsx_files[0]
+
 def main():
     """Main function to run the owner earnings analysis."""
     print("Warren Buffett Owner Earnings Calculator")
@@ -652,22 +674,37 @@ def main():
     xlsx_file = None
     
     if len(sys.argv) > 1:
-        # File path provided as argument
-        xlsx_file = sys.argv[1]
-        if not os.path.exists(xlsx_file):
-            print(f"[ERROR] File not found: {xlsx_file}")
-            return
+        # Check if argument is a ticker or file path
+        arg = sys.argv[1]
+        
+        if arg.endswith('.xlsx') and os.path.exists(arg):
+            # Direct file path provided
+            xlsx_file = arg
+            print(f"[FILE] Using specified file: {os.path.basename(xlsx_file)}")
+        else:
+            # Treat as ticker symbol
+            ticker = arg.upper()
+            print(f"[TICKER] Looking for files for ticker: {ticker}")
+            xlsx_file = find_ticker_xlsx_file(ticker)
+            
+            if not xlsx_file:
+                print(f"[FALLBACK] No ticker-specific files found, using most recent file...")
+                xlsx_file = find_recent_xlsx_file()
     else:
         # Look for recent file in downloaded_files directory
         xlsx_file = find_recent_xlsx_file()
         if not xlsx_file:
             print("[ERROR] No XLSX files found in ./downloaded_files directory")
-            print("[TIP] Usage: python owner_earnings.py <path_to_xlsx_file>")
+            print("[TIP] Usage: python owner_earnings_fixed.py <TICKER_SYMBOL>")
+            print("[TIP] Usage: python owner_earnings_fixed.py <path_to_xlsx_file>")
             print("[TIP] Or place XLSX files in ./downloaded_files directory")
             return
         
         print(f"[FILE] Using most recent file: {os.path.basename(xlsx_file)}")
     
+    if not xlsx_file:
+        print("[ERROR] No suitable XLSX file found")
+        return
     # Process both Annual and Quarterly data
     data_types = ['Annual', 'Quarterly']
     
