@@ -47,9 +47,10 @@ class WorkerThread(QThread):
             log_subprocess_call()
         
         try:
-            # Change to the correct directory
-            os.chdir(Path(__file__).parent)
-            logger.debug(f"Changing directory to: {Path(__file__).parent}")
+            # Keep the original working directory instead of changing to GUI directory
+            # This ensures files are created where the user expects them
+            original_cwd = os.getcwd()
+            logger.debug(f"Using working directory: {original_cwd}")
             
             # Create the subprocess
             logger.debug(f"Creating subprocess: {self.command}")
@@ -60,7 +61,8 @@ class WorkerThread(QThread):
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
-                universal_newlines=True
+                universal_newlines=True,
+                cwd=original_cwd  # Explicitly set working directory
             )
             
             logger.info(f"Subprocess PID: {process.pid}")

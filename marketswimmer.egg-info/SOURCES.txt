@@ -10,16 +10,6 @@ launch_gui.bat
 pyproject.toml
 requirements.txt
 setup.py
-charts/aapl_earnings_components_breakdown.png
-charts/aapl_owner_earnings_comparison.png
-charts/aapl_volatility_analysis.png
-charts/intc_earnings_components_breakdown.png
-charts/intc_owner_earnings_comparison.png
-charts/intc_volatility_analysis.png
-data/owner_earnings_annual_aapl.csv
-data/owner_earnings_annual_cvna.csv
-data/owner_earnings_quarterly_aapl.csv
-data/owner_earnings_quarterly_cvna.csv
 marketswimmer/__init__.py
 marketswimmer/__main__.py
 marketswimmer/cli.py

@@ -1,5 +1,98 @@
 # PyPI Publishing Commands
 
+## 🚀 GUI WORKING DIRECTORY FIX v2.0.27 - GUI FILES NOW CREATED IN CORRECT LOCATION!
+
+### 🔧 CRITICAL GUI BUG FIX IN v2.0.27:
+- **Working Directory Fix** - GUI now preserves user's current directory instead of changing to internal module directory
+- **File Location Consistency** - GUI creates files in same location as CLI (user's working directory)
+- **Subprocess Execution Fix** - Fixed WorkerThread to explicitly pass correct working directory to subprocess
+- **User Experience Improvement** - Files are now created where users expect them, not in hidden module directories
+- **Behavioral Consistency** - GUI and CLI now have identical file creation behavior
+
+### 🐛 BUG RESOLVED:
+- **Problem**: GUI was executing `os.chdir(Path(__file__).parent)` causing files to be created in `marketswimmer/gui/` directory
+- **Solution**: Removed directory change and explicitly set `cwd=original_cwd` in subprocess.Popen()
+- **Result**: GUI creates `data/`, `charts/`, `downloaded_files/` directories in user's current working directory
+
+### 📦 PUBLISHING COMMANDS for v2.0.27:
+```bash
+# Update version in pyproject.toml to 2.0.27
+# Fix GUI working directory bug
+python -m build
+python -m twine upload dist/marketswimmer-2.0.27*
+```
+
+**Published:** August 3, 2025  
+**Package Size:** ~38KB (wheel) - Consistent with v2.0.26  
+**PyPI URL:** https://pypi.org/project/marketswimmer/2.0.27/
+
+## 🚀 CLEANUP RELEASE v2.0.26 - STREAMLINED PRODUCTION BUILD!
+
+### 🧹 MAJOR CLEANUP IN v2.0.26:
+- **Production-Ready Codebase** - Removed all test artifacts, temporary files, and development debris
+- **Smaller Package Size** - Cleaned runtime directories and unused files (38KB vs 40KB wheel)
+- **Removed Debug Noise** - Cleaned up verbose debug statements for cleaner user experience
+- **Streamlined Structure** - Eliminated unnecessary test files and duplicate code
+- **Auto-Generated Directories** - Removed empty directories that app creates automatically when needed
+- **Professional Distribution** - Clean, production-ready package for end users
+
+### 📊 FILES CLEANED:
+- Removed test charts from multiple tickers (AAPL, AMD, CVNA, PNNT, ACHR, INTC, NWN)
+- Removed test data CSV files and downloaded Excel files
+- Removed development test files (`test_gui_import.py`, `test_gui_simple.py`)  
+- Removed unused CLI file (`marketswimmer_cli.py`)
+- Removed empty runtime directories (`charts/`, `data/`, `downloaded_files/`)
+- Streamlined debug output for better user experience
+
+### 📦 PUBLISHING COMMANDS for v2.0.26:
+```bash
+# Update version in pyproject.toml to 2.0.26
+# Clean up all test artifacts and runtime directories
+python -m build
+python -m twine upload dist/marketswimmer-2.0.26*
+```
+
+**Published:** August 3, 2025  
+**Package Size:** 38.4KB (wheel) - Reduced from 40.6KB due to cleanup  
+**PyPI URL:** https://pypi.org/project/marketswimmer/2.0.26/
+
+## 🚀 ENHANCED ANALYTICS v2.0.25 - COMPREHENSIVE INVESTOR DASHBOARD!
+
+### 🔧 MAJOR ENHANCEMENTS IN v2.0.25:
+- **Enhanced Summary Statistics** - Added investment metrics, growth rates, and consistency scores to terminal output
+- **Total Value Creation Tracking** - Cumulative owner earnings calculation and reporting
+- **Average Annual Growth Rate** - Automatic calculation and display of long-term growth trends
+- **Earnings Consistency Score** - Quantified predictability scoring (0-100 scale)
+- **Professional Reporting** - Comprehensive metrics displayed alongside charts for complete analysis
+
+## 🚀 INVESTMENT ANALYSIS ENHANCEMENT v2.0.24 - COMPREHENSIVE INVESTOR METRICS!
+
+### 🔧 MAJOR NEW FEATURES IN v2.0.24:
+- **Investment Quality Score** - Comprehensive 4-factor scoring system (Consistency, Profitability, Growth, Value Creation)
+- **Growth Rate Analysis** - Year-over-year owner earnings growth visualization with average benchmarks
+- **Cumulative Value Creation** - Total value generated over time with running totals
+- **Earnings Consistency Metrics** - Coefficient of variation analysis for earnings predictability
+- **Advanced Analytics** - ROI insights, trend analysis, and investment quality assessment
+- **4th Chart Added** - Complete investment analysis dashboard joins the existing 3 charts
+
+## 🚀 GUI IMPORT FIX v2.0.23 - GUI MODULE FIXED!
+
+### 🔧 CRITICAL GUI FIX IN v2.0.23:
+- **Class Name Correction** - Fixed import error where `MarketSwimmerApp` was not found (class was actually `MarketSwimmerGUI`)
+- **Import Alias Added** - Added backward compatibility alias so both class names work
+- **GUI Launch Working** - `marketswimmer gui` command now launches successfully
+- **Module Exports Fixed** - Updated `__init__.py` to properly export both GUI classes and functions
+- **Complete GUI Resolution** - All GUI import issues resolved for PyQt6-based interface
+
+## 🚀 CHART DISPLAY ENHANCEMENT v2.0.22 - USER EXPERIENCE IMPROVED!
+
+### 🔧 MAJOR CHART IMPROVEMENTS IN v2.0.22:
+- **Newest Data First** - Charts now display most recent years/quarters on the left side of x-axis (reversed chronological order)
+- **Expanded Data View** - Annual charts show 8 recent years (up from 5), quarterly charts show 12 recent quarters  
+- **Dynamic Date Ranges** - Chart titles automatically show actual data ranges instead of hardcoded dates
+- **Enhanced Usability** - Financial trend analysis now follows standard newest-first convention for better readability
+- **Complete Chart Overhaul** - All three chart types (comparison, waterfall, volatility) updated with improved ordering
+
 ## 🚀 VISUALIZATION DATA FIX v2.0.21 - CHART GENERATION ERROR RESOLVED!
 
 ### 🔧 CRITICAL FIXES IN v2.0.21:

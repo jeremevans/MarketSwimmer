@@ -54,12 +54,9 @@ def load_data(ticker=None):
         import glob
         import os
         
-        print(f"[DEBUG] Current working directory: {os.getcwd()}")
-        
         # Use provided ticker or detect it
         if not ticker:
             ticker = detect_ticker_symbol()
-        print(f"[DEBUG] Using ticker: {ticker}")
         
         # Clean ticker for filename
         clean_ticker = ticker.lower().replace('.', '') if ticker and ticker != "TICKER" else None

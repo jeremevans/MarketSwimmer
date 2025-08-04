@@ -6,8 +6,10 @@ for interactive owner earnings analysis.
 """
 
 try:
-    from .main_window import MarketSwimmerApp, main as gui_main
+    from .main_window import MarketSwimmerGUI, main as gui_main
     GUI_AVAILABLE = True
+    # Alias for backward compatibility
+    MarketSwimmerApp = MarketSwimmerGUI
 except ImportError:
     # PyQt6 not available
     GUI_AVAILABLE = False
@@ -22,4 +24,7 @@ except ImportError:
         def __init__(self, *args, **kwargs):
             print("GUI not available. Please install PyQt6: pip install PyQt6")
 
-__all__ = ["MarketSwimmerApp", "gui_main", "GUI_AVAILABLE"]
+    # Also create the alias
+    MarketSwimmerGUI = MarketSwimmerApp
+
+__all__ = ["MarketSwimmerApp", "MarketSwimmerGUI", "gui_main", "GUI_AVAILABLE"]
