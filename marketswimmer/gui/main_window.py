@@ -277,7 +277,7 @@ class MarketSwimmerGUI(QMainWindow):
             self.visualize_button.setEnabled(True)
             self.complete_button.setEnabled(True)
             
-            self.console_output.append(f"✓ Ticker selected: {ticker}")
+            self.console_output.append(f">> Ticker selected: {ticker}")
             self.statusBar().showMessage(f"Ticker selected: {ticker} - Ready for analysis")
             
             logger.info(f"Ticker selected: {ticker}")
@@ -290,12 +290,14 @@ class MarketSwimmerGUI(QMainWindow):
         log_gui_event("BUTTON_CLICK", "Download Data button clicked")
         logger.info(f"Starting data download for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n🔄 Starting data download for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Starting data download for {self.current_ticker}...")
         self.disable_buttons()
         self.show_progress()
         
-        # Download command with monitoring
-        command = f'"{sys.executable}" get_xlsx.py {self.current_ticker} && "{sys.executable}" monitor_downloads.py --check'
+        # Use the modern CLI for data analysis
+        # Fix: Use the correct Python installation path instead of sys.executable
+        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
+        command = f'"{python_exe}" -m marketswimmer analyze {self.current_ticker} --force'
         self.run_command(command)
 
     def calculate_earnings(self):
@@ -306,11 +308,13 @@ class MarketSwimmerGUI(QMainWindow):
         log_gui_event("BUTTON_CLICK", "Calculate Earnings button clicked")
         logger.info(f"Starting earnings calculation for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n📊 Calculating owner earnings for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Calculating owner earnings for {self.current_ticker}...")
         self.disable_buttons()
         self.show_progress()
         
-        command = f'"{sys.executable}" owner_earnings_fixed.py'
+        # Fix: Use the correct Python installation path instead of sys.executable
+        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
+        command = f'"{python_exe}" owner_earnings_fixed.py'
         self.run_command(command)
 
     def create_visualizations(self):
@@ -321,11 +325,14 @@ class MarketSwimmerGUI(QMainWindow):
         log_gui_event("BUTTON_CLICK", "Create Visualizations button clicked")
         logger.info(f"Starting visualization creation for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n📈 Creating visualizations for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Creating visualizations for {self.current_ticker}...")
         self.disable_buttons()
         self.show_progress()
         
-        command = f'"{sys.executable}" visualize_owner_earnings.py'
+        # Use the MarketSwimmer visualization command instead of a standalone script
+        # Fix: Use the correct Python installation path instead of sys.executable
+        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
+        command = f'"{python_exe}" -m marketswimmer visualize --ticker {self.current_ticker}'
         self.run_command(command)
 
     def run_full_analysis(self):
@@ -336,7 +343,7 @@ class MarketSwimmerGUI(QMainWindow):
         log_gui_event("BUTTON_CLICK", "Complete Analysis button clicked")
         logger.info(f"Starting complete analysis for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n🚀 Starting complete analysis for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Starting complete analysis for {self.current_ticker}...")
         self.console_output.append("This will run the full analysis pipeline:")
         self.console_output.append("  1. Download financial data")
         self.console_output.append("  2. Calculate owner earnings")  
@@ -347,7 +354,9 @@ class MarketSwimmerGUI(QMainWindow):
         self.show_progress()
         
         # Use the new MarketSwimmer CLI automation
-        command = f'"{sys.executable}" -m marketswimmer analyze {self.current_ticker}'
+        # Fix: Use the correct Python installation path instead of sys.executable
+        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
+        command = f'"{python_exe}" -m marketswimmer analyze {self.current_ticker}'
         logger.info(f"Full analysis command: {command}")
         
         self.run_command(command)
@@ -371,7 +380,7 @@ class MarketSwimmerGUI(QMainWindow):
 
     def on_process_finished(self):
         """Handle process completion"""
-        self.console_output.append("\n✅ Process completed successfully!")
+        self.console_output.append("\n>> Process completed successfully!")
         self.hide_progress()
         self.enable_buttons()
         self.statusBar().showMessage(f"Analysis completed for {self.current_ticker}")
@@ -380,7 +389,7 @@ class MarketSwimmerGUI(QMainWindow):
 
     def on_process_error(self, error_msg):
         """Handle process error"""
-        self.console_output.append(f"\n❌ Error: {error_msg}")
+        self.console_output.append(f"\nERROR: {error_msg}")
         self.hide_progress()
         self.enable_buttons()
         self.statusBar().showMessage("Error occurred during analysis")

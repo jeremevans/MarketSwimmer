@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "marketswimmer"
-version = "2.0.4"
+version = "2.0.21"
 authors = [
     {name = "Jeremy Evans", email = "jeremyevans@hey.com"},
 ]

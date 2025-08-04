@@ -428,11 +428,11 @@ class OwnerEarningsCalculator:
             if receivables_change or inventory_change or payables_change:
                 print(f"   [DATA] Found working capital components:")
                 if receivables_change:
-                    print(f"      • Receivables changes: {receivables_change}")
+                    print(f"      - Receivables changes: {receivables_change}")
                 if inventory_change:
-                    print(f"      • Inventory changes: {inventory_change}")
+                    print(f"      - Inventory changes: {inventory_change}")
                 if payables_change:
-                    print(f"      • Payables changes: {payables_change}")
+                    print(f"      - Payables changes: {payables_change}")
                 
                 # Calculate combined working capital change
                 # Note: Increases in receivables/inventory are negative for cash flow

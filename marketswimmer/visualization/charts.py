@@ -48,18 +48,156 @@ def detect_ticker_symbol():
     except:
         return "TICKER"
 
-def load_data():
-    """Load both annual and quarterly CSV data."""
+def load_data(ticker=None):
+    """Load both annual and quarterly CSV data for a specific ticker."""
     try:
-        # Load annual data from data directory
-        annual_path = os.path.join('data', 'owner_earnings_financials_annual.csv')
-        annual_df = pd.read_csv(annual_path)
-        print(f"[OK] Loaded annual data: {len(annual_df)} years")
+        import glob
+        import os
         
-        # Load quarterly data from data directory
-        quarterly_path = os.path.join('data', 'owner_earnings_financials_quarterly.csv')
+        print(f"[DEBUG] Current working directory: {os.getcwd()}")
+        
+        # Use provided ticker or detect it
+        if not ticker:
+            ticker = detect_ticker_symbol()
+        print(f"[DEBUG] Using ticker: {ticker}")
+        
+        # Clean ticker for filename
+        clean_ticker = ticker.lower().replace('.', '') if ticker and ticker != "TICKER" else None
+        
+        # Search for annual data files - prioritize specific ticker files
+        annual_files = []
+        if clean_ticker:
+            specific_patterns = [
+                f'data/owner_earnings_annual_{clean_ticker}.csv',
+                f'owner_earnings_annual_{clean_ticker}.csv',
+                f'./data/owner_earnings_annual_{clean_ticker}.csv',
+                f'../data/owner_earnings_annual_{clean_ticker}.csv',
+                f'marketswimmer/gui/data/owner_earnings_annual_{clean_ticker}.csv'
+            ]
+            
+            for pattern in specific_patterns:
+                files = glob.glob(pattern)
+                if files:
+                    annual_files.extend(files)
+                    print(f"[DEBUG] Found ticker-specific files with pattern '{pattern}': {files}")
+                    break  # Use first match for specific ticker
+        
+        # If no specific files found, search for any files
+        if not annual_files:
+            general_patterns = [
+                'data/owner_earnings_annual_*.csv',
+                'owner_earnings_annual_*.csv', 
+                './data/owner_earnings_annual_*.csv',
+                '../data/owner_earnings_annual_*.csv',
+                'marketswimmer/gui/data/owner_earnings_annual_*.csv'
+            ]
+            
+            for pattern in general_patterns:
+                files = glob.glob(pattern)
+                if files:
+                    annual_files.extend(files)
+                    print(f"[DEBUG] General pattern '{pattern}' found: {files}")
+        
+        # Remove duplicates and sort by modification time (most recent first)
+        annual_files = list(set(annual_files))
+        if annual_files:
+            annual_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        # Fallback to old filename format
+        if not annual_files:
+            fallback_patterns = [
+                'data/owner_earnings_financials_annual.csv',
+                'owner_earnings_financials_annual.csv'
+            ]
+            for pattern in fallback_patterns:
+                files = glob.glob(pattern)
+                annual_files.extend(files)
+        
+        if not annual_files:
+            print("[ERROR] No annual data files found in any location")
+            print(f"[DEBUG] Current directory contents: {os.listdir('.')}")
+            if os.path.exists('data'):
+                print(f"[DEBUG] Data directory contents: {os.listdir('data')}")
+            return None, None
+        
+        annual_path = annual_files[0]  # Use the most recent file
+        print(f"[DEBUG] Found annual files: {annual_files}")
+        print(f"[DEBUG] Using most recent annual file: {annual_path}")
+        
+        annual_df = pd.read_csv(annual_path)
+        print(f"[OK] Loaded annual data: {len(annual_df)} years from {annual_path}")
+        
+        # Search for quarterly data files - prioritize specific ticker files
+        quarterly_files = []
+        if clean_ticker:
+            specific_patterns = [
+                f'data/owner_earnings_quarterly_{clean_ticker}.csv',
+                f'owner_earnings_quarterly_{clean_ticker}.csv',
+                f'./data/owner_earnings_quarterly_{clean_ticker}.csv',
+                f'../data/owner_earnings_quarterly_{clean_ticker}.csv',
+                f'marketswimmer/gui/data/owner_earnings_quarterly_{clean_ticker}.csv'
+            ]
+            
+            for pattern in specific_patterns:
+                files = glob.glob(pattern)
+                if files:
+                    quarterly_files.extend(files)
+                    print(f"[DEBUG] Found quarterly ticker-specific files with pattern '{pattern}': {files}")
+                    break  # Use first match for specific ticker
+        
+        # If no specific files found, search for any quarterly files
+        if not quarterly_files:
+            general_patterns = [
+                'data/owner_earnings_quarterly_*.csv',
+                'owner_earnings_quarterly_*.csv',
+                './data/owner_earnings_quarterly_*.csv',
+                '../data/owner_earnings_quarterly_*.csv',
+                'marketswimmer/gui/data/owner_earnings_quarterly_*.csv'
+            ]
+            
+            for pattern in general_patterns:
+                files = glob.glob(pattern)
+                if files:
+                    quarterly_files.extend(files)
+                    print(f"[DEBUG] Quarterly general pattern '{pattern}' found: {files}")
+        
+        # Remove duplicates and sort by modification time
+        quarterly_files = list(set(quarterly_files))
+        if quarterly_files:
+            quarterly_files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+        
+        # Fallback to old filename format
+        if not quarterly_files:
+            fallback_patterns = [
+                'data/owner_earnings_financials_quarterly.csv',
+                'owner_earnings_financials_quarterly.csv'
+            ]
+            for pattern in fallback_patterns:
+                files = glob.glob(pattern)
+                quarterly_files.extend(files)
+            
+        if not quarterly_files:
+            print("[ERROR] No quarterly data files found in any location")
+            print(f"[DEBUG] Searched quarterly patterns for ticker: {clean_ticker}")
+            return None, None
+        
+        quarterly_path = quarterly_files[0]  # Use the most recent file
+        print(f"[DEBUG] Found quarterly files: {quarterly_files}")
+        print(f"[DEBUG] Using most recent quarterly file: {quarterly_path}")
         quarterly_df = pd.read_csv(quarterly_path)
-        print(f"[OK] Loaded quarterly data: {len(quarterly_df)} quarters")
+        print(f"[OK] Loaded quarterly data: {len(quarterly_df)} quarters from {quarterly_path}")
+        
+        return annual_df, quarterly_df
+        
+    except Exception as e:
+        print(f"[ERROR] Error loading data: {e}")
+        import traceback
+        print(f"[DEBUG] Traceback: {traceback.format_exc()}")
+        return None, None
+        print(f"[DEBUG] Found quarterly files: {quarterly_files}")
+        print(f"[DEBUG] Using most recent quarterly file: {quarterly_path}")
+        quarterly_df = pd.read_csv(quarterly_path)
+        print(f"[OK] Loaded quarterly data: {len(quarterly_df)} quarters from {quarterly_path}")
         
         return annual_df, quarterly_df
     
@@ -73,16 +211,102 @@ def prepare_quarterly_data(df):
     """Prepare quarterly data for plotting."""
     # Convert period to datetime for better plotting
     df = df.copy()
-    df['year'] = df['Period'].str[:4].astype(int)
-    df['quarter'] = df['Period'].str[-1].astype(int)
     
-    # Create a proper date column
-    df['date'] = pd.to_datetime(df[['year']].assign(month=(df['quarter']-1)*3+1, day=1))
+    print(f"[DEBUG] Raw quarterly data shape: {df.shape}")
+    print(f"[DEBUG] Period column sample values: {df['Period'].head().tolist()}")
+    print(f"[DEBUG] Period column data types: {df['Period'].dtype}")
     
-    # Convert to millions for better readability
-    financial_cols = ['net_income', 'depreciation', 'capex', 'working_capital_change', 'owner_earnings']
-    for col in financial_cols:
-        df[f'{col}_millions'] = df[col] / 1_000_000
+    # Ensure Period column is string type for string operations
+    df['Period'] = df['Period'].astype(str)
+    print(f"[DEBUG] Period column after string conversion: {df['Period'].head().tolist()}")
+    
+    # Check if this is actually annual data masquerading as quarterly data
+    period_values = df['Period'].unique()
+    is_annual_data = all(len(p) == 4 and p.isdigit() for p in period_values)
+    
+    if is_annual_data:
+        print(f"[WARNING] Detected annual data in quarterly file - treating as annual")
+        # This is annual data, so just parse as years
+        df['year'] = df['Period'].astype(int)
+        df['quarter'] = 2  # Use Q2 as a middle-of-year approximation
+        df['date'] = pd.to_datetime(df[['year']].assign(month=7, day=1))  # July 1st
+        print(f"[DEBUG] Converted annual-as-quarterly data: {df['date'].head().tolist()}")
+    else:
+        # Extract year and quarter from Period (format should be like "2024Q1")
+        try:
+            # Handle different Period formats more robustly
+            print(f"[DEBUG] Attempting to parse quarterly Period values: {df['Period'].unique()}")
+            
+            if df['Period'].str.contains('Q').any():
+                # Format like "2024Q1"
+                df['year'] = df['Period'].str[:4].astype(int)
+                df['quarter'] = df['Period'].str[-1].astype(int)
+            elif df['Period'].str.contains('-').any():
+                # Format like "2024-Q1" or "Q1-2024"
+                # Try to extract 4-digit year and 1-digit quarter
+                year_pattern = df['Period'].str.extract(r'(\d{4})')
+                quarter_pattern = df['Period'].str.extract(r'Q(\d)')
+                df['year'] = year_pattern[0].astype(int)
+                df['quarter'] = quarter_pattern[0].astype(int)
+            else:
+                # Fallback: try to parse as much as possible
+                print(f"[WARNING] Unknown Period format, attempting generic parsing")
+                # Try to extract any 4-digit number as year
+                year_match = df['Period'].str.extract(r'(\d{4})')
+                if not year_match[0].isna().all():
+                    df['year'] = year_match[0].astype(int)
+                else:
+                    df['year'] = 2024  # Default year
+                
+                # Try to extract quarter number
+                quarter_match = df['Period'].str.extract(r'(\d)')
+                if not quarter_match[0].isna().all():
+                    df['quarter'] = quarter_match[0].astype(int)
+                else:
+                    df['quarter'] = 1  # Default quarter
+            
+            print(f"[DEBUG] Extracted years: {df['year'].tolist()}")
+            print(f"[DEBUG] Extracted quarters: {df['quarter'].tolist()}")
+            
+            # Validate extracted values
+            if df['year'].isna().any() or df['quarter'].isna().any():
+                raise ValueError("Failed to extract valid year/quarter values")
+            if (df['quarter'] < 1).any() or (df['quarter'] > 4).any():
+                print(f"[WARNING] Invalid quarter values found: {df['quarter'].unique()}")
+                df['quarter'] = df['quarter'].clip(1, 4)  # Clamp to valid range
+                
+        except Exception as e:
+            print(f"[ERROR] Failed to extract year/quarter: {e}")
+            print(f"[DEBUG] Period values causing issues: {df['Period'].unique()}")
+            # Create fallback values to prevent complete failure
+            df['year'] = 2024
+            df['quarter'] = 1
+            print(f"[WARNING] Using fallback year/quarter values")
+        
+        # Create a proper date column
+        try:
+            df['date'] = pd.to_datetime(df[['year']].assign(month=(df['quarter']-1)*3+1, day=1))
+            print(f"[DEBUG] Successfully created date column: {df['date'].head().tolist()}")
+        except Exception as e:
+            print(f"[ERROR] Failed to create date column: {e}")
+            print(f"[DEBUG] Year values: {df['year'].tolist()}")
+            print(f"[DEBUG] Quarter values: {df['quarter'].tolist()}")
+            # Create a simple date column based on just the year
+            df['date'] = pd.to_datetime(df['year'], format='%Y')
+            print(f"[WARNING] Using year-only dates: {df['date'].head().tolist()}")
+    
+    # Convert to millions for better readability - use the actual CSV column names
+    financial_cols_map = {
+        'Net Income': 'net_income',
+        'Depreciation': 'depreciation', 
+        'CapEx': 'capex',
+        'Working Capital Change': 'working_capital_change',
+        'Owner Earnings': 'owner_earnings'
+    }
+    
+    for csv_col, standard_col in financial_cols_map.items():
+        if csv_col in df.columns:
+            df[f'{standard_col}_millions'] = df[csv_col] / 1_000_000
     
     # Sort by date for proper chronological plotting
     df = df.sort_values('date')
@@ -90,14 +314,42 @@ def prepare_quarterly_data(df):
     return df
 
 def prepare_annual_data(df):
-    """Prepare annual data for plotting."""
+    """Prepare annual data for plotting with robust error handling."""
     df = df.copy()
-    df['date'] = pd.to_datetime(df['Period'], format='%Y')
     
-    # Convert to millions for better readability
-    financial_cols = ['net_income', 'depreciation', 'capex', 'working_capital_change', 'owner_earnings']
-    for col in financial_cols:
-        df[f'{col}_millions'] = df[col] / 1_000_000
+    print(f"[DEBUG] Annual Period column: {df['Period'].head().tolist()}")
+    print(f"[DEBUG] Annual Period dtypes: {df['Period'].dtype}")
+    
+    # Try different date parsing approaches
+    try:
+        # First try: assume it's just years like "2024"
+        df['date'] = pd.to_datetime(df['Period'], format='%Y')
+        print(f"[DEBUG] Successfully parsed annual dates as years")
+    except ValueError as e:
+        print(f"[DEBUG] Year format failed: {e}")
+        try:
+            # Second try: generic datetime parsing
+            df['date'] = pd.to_datetime(df['Period'], errors='coerce')
+            print(f"[DEBUG] Successfully parsed annual dates with generic parser")
+        except Exception as e2:
+            print(f"[ERROR] All annual date parsing failed: {e2}")
+            print(f"[DEBUG] Problematic Period values: {df['Period'].unique()}")
+            # Create a dummy date column to prevent crashes
+            df['date'] = pd.to_datetime('2020-01-01')
+            print(f"[WARNING] Using dummy dates for annual data")
+    
+    # Convert to millions for better readability - use the actual CSV column names
+    financial_cols_map = {
+        'Net Income': 'net_income',
+        'Depreciation': 'depreciation', 
+        'CapEx': 'capex',
+        'Working Capital Change': 'working_capital_change',
+        'Owner Earnings': 'owner_earnings'
+    }
+    
+    for csv_col, standard_col in financial_cols_map.items():
+        if csv_col in df.columns:
+            df[f'{standard_col}_millions'] = df[csv_col] / 1_000_000
     
     return df
 
@@ -375,6 +627,26 @@ def create_volatility_analysis(quarterly_df, ticker):
     """Create charts showing the volatility and trends in owner earnings."""
     fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(16, 12))
     
+    # Check if we have enough data for volatility analysis
+    if len(quarterly_df) < 4:
+        # Not enough data for proper quarterly analysis
+        ax1.text(0.5, 0.5, f'Insufficient data for volatility analysis\n({len(quarterly_df)} periods available)', 
+                ha='center', va='center', transform=ax1.transAxes, fontsize=12)
+        ax2.text(0.5, 0.5, 'Need at least 4 quarters\nfor meaningful analysis', 
+                ha='center', va='center', transform=ax2.transAxes, fontsize=12)
+        ax3.text(0.5, 0.5, 'Quarterly data required', 
+                ha='center', va='center', transform=ax3.transAxes, fontsize=12)
+        ax4.text(0.5, 0.5, 'Analysis not available', 
+                ha='center', va='center', transform=ax4.transAxes, fontsize=12)
+        
+        for ax in [ax1, ax2, ax3, ax4]:
+            ax.set_xlim(0, 1)
+            ax.set_ylim(0, 1)
+            ax.set_title(f'{ticker} Volatility Analysis - Insufficient Data', fontweight='bold')
+        
+        plt.tight_layout()
+        return fig
+    
     # 1. Rolling average to show trend
     quarterly_df['rolling_4q'] = quarterly_df['owner_earnings_millions'].rolling(window=4, center=True).mean()
     quarterly_df['rolling_8q'] = quarterly_df['owner_earnings_millions'].rolling(window=8, center=True).mean()
@@ -396,21 +668,46 @@ def create_volatility_analysis(quarterly_df, ticker):
     quarterly_df['quarter'] = quarterly_df['date'].dt.quarter
     
     # Create pivot for YoY comparison
-    pivot_data = quarterly_df.pivot(index='quarter', columns='year', values='owner_earnings_millions')
-    recent_years = [col for col in pivot_data.columns if col >= 2020]  # Focus on recent years
-    
-    for year in recent_years:
-        if year in pivot_data.columns:
-            ax2.plot([1,2,3,4], pivot_data[year], 'o-', label=f'{year}', linewidth=2, markersize=6)
-    
-    ax2.axhline(y=0, color='black', linestyle='--', alpha=0.7)
-    ax2.set_title('Year-over-Year Quarterly Comparison', fontweight='bold')
-    ax2.set_xlabel('Quarter')
-    ax2.set_ylabel('Owner Earnings ($ Millions)')
-    ax2.set_xticks([1,2,3,4])
-    ax2.set_xticklabels(['Q1', 'Q2', 'Q3', 'Q4'])
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
+    try:
+        pivot_data = quarterly_df.pivot(index='quarter', columns='year', values='owner_earnings_millions')
+        recent_years = [col for col in pivot_data.columns if col >= 2020]  # Focus on recent years
+        
+        # Check if we actually have quarterly data (not just annual data)
+        unique_quarters = quarterly_df['quarter'].unique()
+        if len(unique_quarters) == 1:
+            # This is annual data masquerading as quarterly - show a different chart
+            ax2.bar(quarterly_df['year'], quarterly_df['owner_earnings_millions'], alpha=0.7, color='skyblue')
+            ax2.axhline(y=0, color='black', linestyle='--', alpha=0.7)
+            ax2.set_title('Annual Owner Earnings (labeled as quarterly)', fontweight='bold')
+            ax2.set_xlabel('Year')
+            ax2.set_ylabel('Owner Earnings ($ Millions)')
+            ax2.grid(True, alpha=0.3)
+        else:
+            # Real quarterly data - show quarters
+            for year in recent_years:
+                if year in pivot_data.columns:
+                    quarters = [1,2,3,4]
+                    values = [pivot_data.loc[q, year] if q in pivot_data.index else None for q in quarters]
+                    # Filter out None values
+                    valid_quarters = [q for q, v in zip(quarters, values) if v is not None]
+                    valid_values = [v for v in values if v is not None]
+                    if valid_quarters and valid_values:
+                        ax2.plot(valid_quarters, valid_values, 'o-', label=f'{year}', linewidth=2, markersize=6)
+            
+            ax2.axhline(y=0, color='black', linestyle='--', alpha=0.7)
+            ax2.set_title('Year-over-Year Quarterly Comparison', fontweight='bold')
+            ax2.set_xlabel('Quarter')
+            ax2.set_ylabel('Owner Earnings ($ Millions)')
+            ax2.set_xticks([1,2,3,4])
+            ax2.set_xticklabels(['Q1', 'Q2', 'Q3', 'Q4'])
+            ax2.legend()
+            ax2.grid(True, alpha=0.3)
+            
+    except Exception as e:
+        print(f"[WARNING] Error creating YoY chart: {e}")
+        ax2.text(0.5, 0.5, f'YoY Analysis Error:\n{str(e)}', 
+                ha='center', va='center', transform=ax2.transAxes, fontsize=10)
+        ax2.set_title('Year-over-Year Analysis - Error', fontweight='bold')
     
     # 3. Distribution histogram
     ax3.hist(quarterly_df['owner_earnings_millions'], bins=20, alpha=0.7, color='skyblue', edgecolor='black')
@@ -429,8 +726,8 @@ def create_volatility_analysis(quarterly_df, ticker):
     negative_quarters = quarterly_df[quarterly_df['owner_earnings_millions'] <= 0]
     
     summary_data = {
-        'Positive Quarters': [len(positive_quarters), positive_quarters['owner_earnings_millions'].mean()],
-        'Negative Quarters': [len(negative_quarters), negative_quarters['owner_earnings_millions'].mean()]
+        'Positive Quarters': [len(positive_quarters), positive_quarters['owner_earnings_millions'].mean() if len(positive_quarters) > 0 else 0],
+        'Negative Quarters': [len(negative_quarters), negative_quarters['owner_earnings_millions'].mean() if len(negative_quarters) > 0 else 0]
     }
     
     categories = list(summary_data.keys())
@@ -486,10 +783,11 @@ def save_and_show_plots(figures, filenames, ticker):
     # plt.show()
     print("\n[OK] All charts displayed and saved!")
 
-def main():
+def main(ticker=None):
     """Main function to create all visualizations."""
-    # Detect ticker symbol
-    ticker = detect_ticker_symbol()
+    # Use provided ticker or detect it
+    if ticker is None:
+        ticker = detect_ticker_symbol()
     
     print(f"{ticker} Owner Earnings Visualization Tool")
     print("=" * 50)
@@ -497,8 +795,8 @@ def main():
     # Set up plotting style
     setup_plotting_style()
     
-    # Load data
-    annual_df, quarterly_df = load_data()
+    # Load data with specific ticker
+    annual_df, quarterly_df = load_data(ticker)
     if annual_df is None or quarterly_df is None:
         return
     

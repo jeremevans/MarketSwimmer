@@ -35,10 +35,10 @@ def analyze_ticker_workflow(ticker: str, force: bool = False) -> bool:
         return workflow.run_complete_analysis(ticker, force_download=force)
         
     except Exception as e:
-        console.print(f"[red]❌ Error during analysis: {e}[/red]")
+        console.print(f"[red]ERROR: Error during analysis: {e}[/red]")
         
         # Fallback to guidance if automated workflow fails
-        console.print(f"[yellow]💡 Falling back to manual guidance for {ticker}:[/yellow]")
+        console.print(f"[yellow]NOTE: Falling back to manual guidance for {ticker}:[/yellow]")
         console.print(f"  1. Visit: https://stockrow.com/vector/exports/financials/{ticker.upper()}")
         console.print(f"  2. Download the Excel file")
         console.print(f"  3. Run: ms calculate --ticker {ticker}")
@@ -54,16 +54,16 @@ def visualize_existing_data() -> bool:
         bool: True if visualization completed successfully
     """
     try:
-        console.print("📊 Generating charts from existing data...")
+        console.print(">> Generating charts from existing data...")
         
         # For now, provide a helpful message
-        console.print("[yellow]⚠️ Visualization from existing data not yet implemented in package version.[/yellow]")
-        console.print("[yellow]📝 To create visualizations:[/yellow]")
+        console.print("[yellow]WARNING: Visualization from existing data not yet implemented in package version.[/yellow]")
+        console.print("[yellow]NOTE: To create visualizations:[/yellow]")
         console.print("  1. Ensure you have data files in the data/ directory")
         console.print("  2. Run: ms visualize")
         
         return "guidance_provided"  # Not implemented yet, but guidance given
         
     except Exception as e:
-        console.print(f"[red]❌ Error during visualization: {e}[/red]")
+        console.print(f"[red]ERROR: Error during visualization: {e}[/red]")
         return False

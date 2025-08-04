@@ -41,10 +41,10 @@ class DownloadManager:
         base_url = "https://stockrow.com/vector/exports/financials/{}?direction=desc"
         url = base_url.format(ticker.upper())
         
-        console.print(f"[blue]🌐 Opening StockRow download for {ticker.upper()}[/blue]")
+        console.print(f"[blue]>> Opening StockRow download for {ticker.upper()}[/blue]")
         console.print(f"[dim]URL: {url}[/dim]")
-        console.print("\n[yellow]📥 Please download the XLSX file from your browser[/yellow]")
-        console.print("[yellow]⏳ Waiting for download to complete...[/yellow]")
+        console.print("\n[yellow]>> Please download the XLSX file from your browser[/yellow]")
+        console.print("[yellow]>> Waiting for download to complete...[/yellow]")
         
         webbrowser.open(url)
         return url
@@ -66,7 +66,7 @@ class DownloadManager:
     
     def wait_for_download(self, ticker: str, timeout: int = 120) -> Optional[Path]:
         """Wait for a financial data download to complete."""
-        console.print(f"[yellow]⏳ Monitoring downloads folder for {ticker} data...[/yellow]")
+        console.print(f"[yellow]>> Monitoring downloads folder for {ticker} data...[/yellow]")
         
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -74,12 +74,12 @@ class DownloadManager:
             
             for file_path in recent_files:
                 if self._is_financial_data_file(file_path, ticker):
-                    console.print(f"[green]✅ Found download: {file_path.name}[/green]")
+                    console.print(f"[green]>> Found download: {file_path.name}[/green]")
                     return file_path
             
             time.sleep(2)  # Check every 2 seconds
         
-        console.print(f"[red]⏰ Timeout waiting for download[/red]")
+        console.print(f"[red]>> Timeout waiting for download[/red]")
         return None
     
     def _is_financial_data_file(self, file_path: Path, ticker: str) -> bool:
@@ -107,10 +107,10 @@ class DownloadManager:
         
         try:
             shutil.copy2(source_file, target_path)
-            console.print(f"[green]📁 Copied to: {target_path}[/green]")
+            console.print(f"[green]>> Copied to: {target_path}[/green]")
             return target_path
         except Exception as e:
-            console.print(f"[red]❌ Error copying file: {e}[/red]")
+            console.print(f"[red]ERROR: Error copying file: {e}[/red]")
             raise
     
     def get_latest_data_file(self, ticker: Optional[str] = None) -> Optional[Path]:
