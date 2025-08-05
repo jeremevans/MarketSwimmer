@@ -53,23 +53,48 @@ class WorkerThread(QThread):
             original_cwd = os.getcwd()
             logger.debug(f"Using working directory: {original_cwd}")
             
-            # Create the subprocess
+            # Create the subprocess with unbuffered output
             logger.debug(f"Creating subprocess: {self.command}")
+            env = os.environ.copy()
+            env['PYTHONUNBUFFERED'] = '1'  # Force unbuffered output
+            
             process = subprocess.Popen(
                 self.command,
                 shell=True,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                bufsize=1,
+                bufsize=0,  # Unbuffered
                 universal_newlines=True,
-                cwd=original_cwd  # Explicitly set working directory
+                cwd=original_cwd,
+                env=env  # Use environment with unbuffered Python
             )
             
             logger.info(f"Subprocess PID: {process.pid}")
             
-            # Read output with timeout
+            # Read output with timeout using threading for Windows compatibility
             import time
+            import threading
+            import queue
+            
+            def read_output(proc, q):
+                """Read output in a separate thread to avoid blocking"""
+                try:
+                    for line in iter(proc.stdout.readline, ''):
+                        if line:
+                            q.put(line.rstrip())
+                        if proc.poll() is not None:
+                            break
+                except Exception as e:
+                    q.put(f"Error reading output: {e}")
+                finally:
+                    q.put(None)  # Signal end of output
+            
+            output_queue = queue.Queue()
+            reader_thread = threading.Thread(target=read_output, args=(process, output_queue))
+            reader_thread.daemon = True
+            reader_thread.start()
+            
             start_time = time.time()
             last_output_time = start_time
             
@@ -93,38 +118,29 @@ class WorkerThread(QThread):
                     self.error_signal.emit(f"Process timed out after {self.timeout} seconds - download manually and use Calculate Owner Earnings")
                     return
                 
-                # Try to read a line with a short timeout
+                # Try to get output from queue with short timeout
                 try:
-                    import select
-                    if hasattr(select, 'select'):
-                        # Unix-like systems
-                        ready, _, _ = select.select([process.stdout], [], [], 1.0)
-                        if ready:
-                            line = process.stdout.readline()
-                            if line:
-                                self.output_signal.emit(line.rstrip())
-                                last_output_time = current_time
-                    else:
-                        # Windows - just try to read
-                        line = process.stdout.readline()
-                        if line:
-                            self.output_signal.emit(line.rstrip())
-                            last_output_time = current_time
-                        else:
-                            time.sleep(0.1)
-                            
-                except Exception:
+                    line = output_queue.get(timeout=0.5)
+                    if line is None:  # End of output signal
+                        break
+                    self.output_signal.emit(line)
+                    last_output_time = current_time
+                except queue.Empty:
+                    # No output available, continue checking
                     time.sleep(0.1)
             
-            # Read any remaining output
-            remaining_output = process.stdout.read()
-            if remaining_output:
-                for line in remaining_output.split('\n'):
-                    if line.strip():
-                        self.output_signal.emit(line.rstrip())
-            
-            # Wait for process to complete
+            # Wait for process to complete and get final output
             process.wait()
+            
+            # Get any remaining output from queue
+            while True:
+                try:
+                    line = output_queue.get_nowait()
+                    if line is None:
+                        break
+                    self.output_signal.emit(line)
+                except queue.Empty:
+                    break
             
             if process.returncode == 0:
                 logger.info(f"Subprocess completed successfully with return code: {process.returncode}")
