@@ -35,9 +35,10 @@ class WorkerThread(QThread):
     finished_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
 
-    def __init__(self, command):
+    def __init__(self, command, timeout=10):
         super().__init__()
         self.command = command
+        self.timeout = timeout
 
     def run(self):
         log_function_entry(f"WorkerThread.run() args=[{self.command}]")
@@ -67,10 +68,60 @@ class WorkerThread(QThread):
             
             logger.info(f"Subprocess PID: {process.pid}")
             
-            # Read output in real-time
-            for line in iter(process.stdout.readline, ''):
-                if line:
-                    self.output_signal.emit(line.rstrip())
+            # Read output with timeout
+            import time
+            start_time = time.time()
+            last_output_time = start_time
+            
+            while True:
+                # Check if process has finished
+                if process.poll() is not None:
+                    break
+                    
+                # Check for timeout
+                current_time = time.time()
+                if current_time - start_time > self.timeout:
+                    if self.timeout > 60:  # If using the longer timeout for downloads
+                        self.output_signal.emit("⏱️ Download timeout reached")
+                        self.output_signal.emit("📁 Browser should be open - please download XLSX file manually")
+                        self.output_signal.emit("🔄 Click 'Calculate Owner Earnings' once download completes")
+                    else:
+                        self.output_signal.emit("⚠️ Process timeout - this command requires manual interaction")
+                        self.output_signal.emit("📁 Opening browser for manual download...")
+                    process.terminate()
+                    process.wait()
+                    self.error_signal.emit(f"Process timed out after {self.timeout} seconds - download manually and use Calculate Owner Earnings")
+                    return
+                
+                # Try to read a line with a short timeout
+                try:
+                    import select
+                    if hasattr(select, 'select'):
+                        # Unix-like systems
+                        ready, _, _ = select.select([process.stdout], [], [], 1.0)
+                        if ready:
+                            line = process.stdout.readline()
+                            if line:
+                                self.output_signal.emit(line.rstrip())
+                                last_output_time = current_time
+                    else:
+                        # Windows - just try to read
+                        line = process.stdout.readline()
+                        if line:
+                            self.output_signal.emit(line.rstrip())
+                            last_output_time = current_time
+                        else:
+                            time.sleep(0.1)
+                            
+                except Exception:
+                    time.sleep(0.1)
+            
+            # Read any remaining output
+            remaining_output = process.stdout.read()
+            if remaining_output:
+                for line in remaining_output.split('\n'):
+                    if line.strip():
+                        self.output_signal.emit(line.rstrip())
             
             # Wait for process to complete
             process.wait()
@@ -100,52 +151,65 @@ class MarketSwimmerGUI(QMainWindow):
         # Set application style
         self.setStyleSheet("""
             QMainWindow {
-                background-color: #f0f0f0;
+                background-color: #ffffff;
             }
             QGroupBox {
                 font-weight: bold;
-                border: 2px solid #cccccc;
-                border-radius: 5px;
+                border: 1px solid #d0d0d0;
+                border-radius: 8px;
                 margin-top: 1ex;
-                padding-top: 10px;
-                background-color: white;
+                padding-top: 15px;
+                background-color: #fafafa;
+                color: #333333;
             }
             QGroupBox::title {
                 subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-            QPushButton {
-                background-color: #4CAF50;
-                border: none;
-                color: white;
-                padding: 8px 16px;
-                text-align: center;
-                font-size: 14px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-            QPushButton:disabled {
-                background-color: #cccccc;
-                color: #666666;
-            }
-            QTextEdit {
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                padding: 5px;
-                font-family: 'Consolas', 'Monaco', monospace;
-                font-size: 11px;
+                left: 15px;
+                padding: 0 8px 0 8px;
+                color: #2c3e50;
                 background-color: #fafafa;
             }
-            QLabel {
+            QPushButton {
+                background-color: #ffffff;
+                border: 2px solid #3498db;
+                color: #3498db;
+                padding: 10px 20px;
+                text-align: center;
+                font-size: 14px;
+                border-radius: 6px;
+                font-weight: 500;
+                min-height: 20px;
+            }
+            QPushButton:hover {
+                background-color: #3498db;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: #2980b9;
+                border-color: #2980b9;
+                color: #ffffff;
+            }
+            QPushButton:disabled {
+                background-color: #f5f5f5;
+                border-color: #cccccc;
+                color: #999999;
+            }
+            QTextEdit {
+                border: 1px solid #d0d0d0;
+                border-radius: 6px;
+                padding: 10px;
+                font-family: 'Consolas', 'Courier New', monospace;
                 font-size: 12px;
-                color: #333;
+                background-color: #ffffff;
+                color: #333333;
+                line-height: 1.4;
+            }
+            QLabel {
+                font-size: 13px;
+                color: #2c3e50;
+            }
+            QInputDialog {
+                background-color: #ffffff;
             }
         """)
 
@@ -177,7 +241,7 @@ class MarketSwimmerGUI(QMainWindow):
         ticker_layout = QHBoxLayout(ticker_group)
         
         self.ticker_label = QLabel("Selected Ticker: None")
-        self.ticker_label.setStyleSheet("font-size: 14px; font-weight: bold; color: #2980b9;")
+        self.ticker_label.setStyleSheet("font-size: 16px; font-weight: 600; color: #2980b9; padding: 5px;")
         
         self.select_ticker_button = QPushButton("Select Ticker")
         self.select_ticker_button.clicked.connect(self.select_ticker)
@@ -210,15 +274,22 @@ class MarketSwimmerGUI(QMainWindow):
         self.complete_button.setEnabled(False)
         self.complete_button.setStyleSheet("""
             QPushButton {
-                background-color: #e74c3c;
+                background-color: #ffffff;
+                border: 2px solid #e74c3c;
+                color: #e74c3c;
                 font-size: 16px;
-                padding: 12px 24px;
+                padding: 15px 30px;
+                font-weight: 600;
+                border-radius: 8px;
             }
             QPushButton:hover {
-                background-color: #c0392b;
+                background-color: #e74c3c;
+                color: #ffffff;
             }
             QPushButton:pressed {
-                background-color: #a93226;
+                background-color: #c0392b;
+                border-color: #c0392b;
+                color: #ffffff;
             }
         """)
         
@@ -227,6 +298,30 @@ class MarketSwimmerGUI(QMainWindow):
         analysis_layout.addWidget(self.earnings_button, 0, 1)
         analysis_layout.addWidget(self.visualize_button, 1, 0)
         analysis_layout.addWidget(self.complete_button, 1, 1)
+        
+        # Add Open Charts Folder button
+        self.open_charts_button = QPushButton("Open Charts Folder")
+        self.open_charts_button.clicked.connect(self.open_charts_folder)
+        self.open_charts_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 2px solid #27ae60;
+                color: #27ae60;
+                font-size: 14px;
+                padding: 12px 20px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #27ae60;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: #229954;
+                border-color: #229954;
+                color: #ffffff;
+            }
+        """)
+        analysis_layout.addWidget(self.open_charts_button, 2, 0, 1, 2)  # Span 2 columns
         
         main_layout.addWidget(analysis_group)
         
@@ -244,11 +339,21 @@ class MarketSwimmerGUI(QMainWindow):
         clear_button.clicked.connect(self.clear_console)
         clear_button.setStyleSheet("""
             QPushButton {
-                background-color: #95a5a6;
+                background-color: #ffffff;
+                border: 2px solid #95a5a6;
+                color: #95a5a6;
                 max-width: 150px;
+                padding: 8px 16px;
+                font-weight: 500;
             }
             QPushButton:hover {
+                background-color: #95a5a6;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
                 background-color: #7f8c8d;
+                border-color: #7f8c8d;
+                color: #ffffff;
             }
         """)
         console_layout.addWidget(clear_button)
@@ -293,14 +398,19 @@ class MarketSwimmerGUI(QMainWindow):
         logger.info(f"Starting data download for ticker: {self.current_ticker}")
         
         self.console_output.append(f"\n>> Starting data download for {self.current_ticker}...")
+        self.console_output.append("🌐 Opening browser for download...")
+        self.console_output.append("📥 Will monitor Downloads folder for new XLSX files...")
+        self.console_output.append("⏱️ Timeout: 5 minutes (plenty of time for manual download)")
         self.disable_buttons()
         self.show_progress()
         
-        # Use the modern CLI for data analysis
-        # Fix: Use the correct Python installation path instead of sys.executable
-        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
-        command = f'"{python_exe}" -m marketswimmer analyze {self.current_ticker} --force'
-        self.run_command(command)
+        # Use the modern CLI for data analysis with proper timeout (5 minutes)
+        command = f'python -m marketswimmer analyze {self.current_ticker} --force'
+        self.worker_thread = WorkerThread(command, timeout=300)  # 5 minutes like the original
+        self.worker_thread.output_signal.connect(self.update_console)
+        self.worker_thread.finished_signal.connect(self.on_download_finished)
+        self.worker_thread.error_signal.connect(self.on_download_timeout)
+        self.worker_thread.start()
 
     def calculate_earnings(self):
         if not self.current_ticker:
@@ -310,14 +420,18 @@ class MarketSwimmerGUI(QMainWindow):
         log_gui_event("BUTTON_CLICK", "Calculate Earnings button clicked")
         logger.info(f"Starting earnings calculation for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n>> Calculating owner earnings for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Processing downloaded data for {self.current_ticker}...")
+        self.console_output.append(">> Converting XLSX files to analysis format...")
         self.disable_buttons()
         self.show_progress()
         
-        # Fix: Use the correct Python installation path instead of sys.executable
-        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
-        command = f'"{python_exe}" owner_earnings_fixed.py'
-        self.run_command(command)
+        # First process the downloaded XLSX files
+        command = f'python process_financial_data.py {self.current_ticker}'
+        self.worker_thread = WorkerThread(command, timeout=30)
+        self.worker_thread.output_signal.connect(self.update_console)
+        self.worker_thread.finished_signal.connect(self.on_data_processed)
+        self.worker_thread.error_signal.connect(self.on_process_error)
+        self.worker_thread.start()
 
     def create_visualizations(self):
         if not self.current_ticker:
@@ -332,9 +446,8 @@ class MarketSwimmerGUI(QMainWindow):
         self.show_progress()
         
         # Use the MarketSwimmer visualization command instead of a standalone script
-        # Fix: Use the correct Python installation path instead of sys.executable
-        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
-        command = f'"{python_exe}" -m marketswimmer visualize --ticker {self.current_ticker}'
+        # Use python command which is available in PATH
+        command = f'python -m marketswimmer visualize --ticker {self.current_ticker}'
         self.run_command(command)
 
     def run_full_analysis(self):
@@ -350,18 +463,23 @@ class MarketSwimmerGUI(QMainWindow):
         self.console_output.append("  1. Download financial data")
         self.console_output.append("  2. Calculate owner earnings")  
         self.console_output.append("  3. Create visualizations")
+        self.console_output.append("🌐 Opening browser for download...")
+        self.console_output.append("📥 Will monitor Downloads folder for new XLSX files...")
+        self.console_output.append("⏱️ Timeout: 5 minutes (plenty of time for manual download)")
         self.console_output.append("Please wait...\n")
         
         self.disable_buttons()
         self.show_progress()
         
-        # Use the new MarketSwimmer CLI automation
-        # Fix: Use the correct Python installation path instead of sys.executable
-        python_exe = r"C:\Users\jerem\AppData\Local\Programs\Python\Python312\python.exe"
-        command = f'"{python_exe}" -m marketswimmer analyze {self.current_ticker}'
+        # Use the new MarketSwimmer CLI automation with proper timeout
+        command = f'python -m marketswimmer analyze {self.current_ticker}'
         logger.info(f"Full analysis command: {command}")
         
-        self.run_command(command)
+        self.worker_thread = WorkerThread(command, timeout=300)
+        self.worker_thread.output_signal.connect(self.update_console)
+        self.worker_thread.finished_signal.connect(self.on_process_finished)
+        self.worker_thread.error_signal.connect(self.on_process_error)
+        self.worker_thread.start()
 
     def run_command(self, command):
         """Run a command in a separate thread"""
@@ -398,6 +516,39 @@ class MarketSwimmerGUI(QMainWindow):
         
         logger.error(f"Process error: {error_msg}")
 
+    def on_download_finished(self):
+        """Handle download process completion (shouldn't happen due to manual nature)"""
+        self.console_output.append("\n>> Download process completed!")
+        self.console_output.append(">> Please manually download the XLSX file if it hasn't started automatically")
+        self.console_output.append(">> Then click 'Calculate Owner Earnings' to process the data")
+        self.hide_progress()
+        self.enable_buttons()
+        self.statusBar().showMessage("Download completed - ready to process data")
+        
+        logger.info("Download process completed")
+
+    def on_download_timeout(self, error_msg):
+        """Handle download timeout (expected behavior)"""
+        self.console_output.append(f"\n>> {error_msg}")
+        self.console_output.append(">> This is normal - the browser should have opened for manual download")
+        self.console_output.append(">> Download the XLSX file manually, then click 'Calculate Owner Earnings'")
+        self.hide_progress()
+        self.enable_buttons()
+        self.statusBar().showMessage("Ready to process downloaded data")
+        
+        logger.info("Download timeout - normal behavior")
+
+    def on_data_processed(self):
+        """Handle data processing completion"""
+        self.console_output.append("\n>> Data processing completed successfully!")
+        self.console_output.append(">> Financial data has been converted to analysis format")
+        self.console_output.append(">> You can now run owner earnings calculations and visualizations")
+        self.hide_progress()
+        self.enable_buttons()
+        self.statusBar().showMessage(f"Data processed for {self.current_ticker} - ready for analysis")
+        
+        logger.info("Data processing completed successfully")
+
     def disable_buttons(self):
         """Disable all analysis buttons during processing"""
         self.download_button.setEnabled(False)
@@ -428,6 +579,25 @@ class MarketSwimmerGUI(QMainWindow):
         self.console_output.append("Console cleared.")
         
         logger.info("Console cleared by user")
+
+    def open_charts_folder(self):
+        """Open the charts folder in Windows Explorer"""
+        log_gui_event("BUTTON_CLICK", "Open Charts Folder button clicked")
+        
+        charts_folder = Path("charts")
+        if not charts_folder.exists():
+            charts_folder.mkdir(parents=True, exist_ok=True)
+            self.console_output.append(">> Created charts folder")
+        
+        # Open the folder in Windows Explorer
+        try:
+            os.startfile(str(charts_folder.absolute()))
+            self.console_output.append(f">> Opened charts folder: {charts_folder.absolute()}")
+            logger.info(f"Opened charts folder: {charts_folder.absolute()}")
+        except Exception as e:
+            error_msg = f"Could not open charts folder: {str(e)}"
+            self.console_output.append(f"ERROR: {error_msg}")
+            logger.error(error_msg)
 
 def main():
     log_function_entry("main()")

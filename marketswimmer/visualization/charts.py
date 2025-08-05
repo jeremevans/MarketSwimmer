@@ -348,6 +348,9 @@ def prepare_annual_data(df):
         if csv_col in df.columns:
             df[f'{standard_col}_millions'] = df[csv_col] / 1_000_000
     
+    # Sort by date for proper chronological plotting (oldest to newest)
+    df = df.sort_values('date')
+    
     return df
 
 def create_owner_earnings_comparison(annual_df, quarterly_df, ticker):
@@ -433,14 +436,14 @@ def create_components_breakdown(annual_df, quarterly_df, ticker):
     return fig
 
 def create_annual_waterfall_chart(ax, df, ticker):
-    """Create a waterfall chart showing annual owner earnings components."""
+    """Create a waterfall chart showing annual owner earnings components for all years."""
     
-    # Get the last 5 years for better visibility
-    recent_years = df.tail(5).copy()
+    # Use all years instead of limiting to recent ones
+    recent_years = df.copy()
     
-    # Set up the chart dimensions
+    # Set up the chart dimensions - adjust bar width based on number of years
     n_years = len(recent_years)
-    bar_width = 0.15
+    bar_width = max(0.08, min(0.15, 2.0 / n_years))  # Dynamic bar width
     
     # Create positions for each year
     year_positions = np.arange(n_years)
@@ -520,22 +523,33 @@ def create_annual_waterfall_chart(ax, df, ticker):
     # Formatting
     ax.set_xticks(year_positions)
     ax.set_xticklabels([str(int(y['Period'])) for _, y in recent_years.iterrows()])
-    ax.set_title(f'{ticker} Annual Owner Earnings Waterfall - Recent Years', fontweight='bold', fontsize=16)
+    ax.set_title(f'{ticker} Annual Owner Earnings Waterfall - All Years', fontweight='bold', fontsize=16)
     ax.set_ylabel('Amount ($ Millions)')
-    ax.legend(loc='upper left', fontsize=10)
+    
+    # Create custom legend to show both positive and negative WC changes
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
+        Patch(facecolor='#A23B72', alpha=0.8, label='+ Depreciation'),
+        Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
+        Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
+        Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left', fontsize=10)
+    
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='black', linestyle='-', alpha=0.8)
 
 def create_waterfall_chart(ax, df, ticker):
-    """Create a waterfall chart showing owner earnings components for recent quarters."""
+    """Create a waterfall chart showing owner earnings components for all quarters."""
     
-    # Get the last 8 quarters for quarterly granularity
-    recent_quarters = df.tail(8).copy()
+    # Use all quarters instead of limiting to recent ones
+    recent_quarters = df.copy()
     
-    # Set up the chart dimensions
+    # Set up the chart dimensions - adjust bar width based on number of quarters
     n_quarters = len(recent_quarters)
-    n_components = 5  # Net Income, Depreciation, CapEx, WC Changes, Owner Earnings
-    bar_width = 0.15
+    bar_width = max(0.08, min(0.15, 3.0 / n_quarters))  # Dynamic bar width
     
     # Create positions for each quarter
     quarter_positions = np.arange(n_quarters)
@@ -613,10 +627,35 @@ def create_waterfall_chart(ax, df, ticker):
     
     # Formatting
     ax.set_xticks(quarter_positions)
-    ax.set_xticklabels([q['Period'] for _, q in recent_quarters.iterrows()], rotation=45, ha='right')
-    ax.set_title(f'{ticker} Owner Earnings Waterfall - Recent Quarters', fontweight='bold', fontsize=14)
+    quarter_labels = [q['Period'] for _, q in recent_quarters.iterrows()]
+    
+    # If too many quarters, show every 4th label (yearly intervals) for readability
+    if len(quarter_labels) > 16:
+        display_labels = []
+        for i, label in enumerate(quarter_labels):
+            if i % 4 == 0 or label.endswith('Q4'):  # Show every 4th or year-end quarters
+                display_labels.append(label)
+            else:
+                display_labels.append('')
+        ax.set_xticklabels(display_labels, rotation=45, ha='right')
+    else:
+        ax.set_xticklabels(quarter_labels, rotation=45, ha='right')
+    
+    ax.set_title(f'{ticker} Owner Earnings Waterfall - All Quarters', fontweight='bold', fontsize=14)
     ax.set_ylabel('Amount ($ Millions)')
-    ax.legend(loc='upper left', fontsize=9)
+    
+    # Create custom legend to show both positive and negative WC changes
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
+        Patch(facecolor='#A23B72', alpha=0.8, label='+ Depreciation'),
+        Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
+        Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
+        Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings')
+    ]
+    ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
+    
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='black', linestyle='-', alpha=0.8)
 

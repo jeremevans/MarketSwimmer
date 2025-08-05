@@ -24,10 +24,26 @@ class DownloadManager:
     
     def _get_download_folder(self) -> Optional[Path]:
         """Get the user's default download folder."""
+        # First try Windows registry for actual Downloads location
+        try:
+            import winreg
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 
+                               r'Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders')
+            downloads_path = winreg.QueryValueEx(key, '{374DE290-123F-4565-9164-39C4925E467B}')[0]
+            winreg.CloseKey(key)
+            downloads_folder = Path(downloads_path)
+            if downloads_folder.exists():
+                return downloads_folder
+        except Exception:
+            pass
+        
+        # Fallback to common locations
         user_home = Path.home()
         download_folders = [
             user_home / "Downloads",
-            user_home / "Download",
+            user_home / "Download", 
+            user_home / "OneDrive" / "Desktop" / "Downloads",
+            user_home / "OneDrive" / "Downloads",
             Path("C:/Users") / os.getenv("USERNAME", "") / "Downloads"
         ]
         
@@ -70,7 +86,8 @@ class DownloadManager:
         
         start_time = time.time()
         while time.time() - start_time < timeout:
-            recent_files = self.find_recent_xlsx_files(minutes_back=2)
+            # Check for recent files (increased from 2 to 10 minutes to catch existing downloads)
+            recent_files = self.find_recent_xlsx_files(minutes_back=10)
             
             for file_path in recent_files:
                 if self._is_financial_data_file(file_path, ticker):

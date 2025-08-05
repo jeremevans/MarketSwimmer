@@ -1,39 +1,46 @@
-# MarketSwimmer - Owner Earnings Analysis Tool
+# MarketSwimmer - Owner Earnings Analysis Tool 🏊‍♂️📈
 
 A comprehensive tool for analyzing Warren Buffett's "Owner Earnings" from financial statement data.
 
-## 📁 Directory Structure
+## � **v2.1.0 - What's New**
 
-```
-MarketSwimmer/
-├── 📊 charts/                  # Generated visualization charts
-├── 📈 data/                    # CSV output files and analysis results
-├── 📥 downloaded_files/        # Financial data Excel files from StockRow
-├── 📝 logs/                    # Application logs
-├── 🛠️ scripts/                # Utility and test scripts
-├── 🚀 Main Applications
-│   ├── market_swimmer_gui_clean.py      # Main GUI application
-│   ├── analyze_ticker_gui.py           # Complete analysis workflow
-│   ├── owner_earnings_fixed.py         # Core analysis engine
-│   └── visualize_owner_earnings.py     # Chart generation
-├── 🔧 Utilities
-│   ├── open_charts.py                  # Chart viewer
-│   ├── monitor_downloads.py            # Download automation
-│   ├── auto_download.py               # Download helper
-│   └── logger_config.py               # Logging configuration
-└── 📋 Batch Files
-    ├── launch_clean_gui.bat           # Start GUI
-    ├── start_gui_safe.bat             # Safe startup
-    └── [other .bat files]
+✅ **Complete Data Processing Pipeline**: Automated XLSX-to-CSV conversion for seamless workflow  
+✅ **Real Quarterly Data**: Proper quarter-by-quarter financial analysis (not just annual duplicates)  
+✅ **Professional Visualizations**: 3 chart types with recent years focus  
+✅ **Smart Download Detection**: Automatically detects XLSX files in Downloads folder  
+✅ **Clean Color Scheme**: Improved white/blue theme for better readability
+
+## 📦 **Installation**
+
+```bash
+pip install marketswimmer
 ```
 
-## 🚀 Quick Start
+## � Quick Start
 
-1. **Launch GUI**: Double-click `launch_clean_gui.bat`
+### Command Line Usage
+
+```bash
+# Launch GUI
+marketswimmer gui
+
+# Process downloaded data
+python process_financial_data.py TICKER
+
+# Create visualizations
+marketswimmer visualize --ticker TICKER
+
+# Full analysis
+marketswimmer analyze TICKER
+```
+
+### GUI Workflow
+
+1. **Launch GUI**: `marketswimmer gui` or double-click `launch_clean_gui.bat`
 2. **Select Ticker**: Choose a stock symbol (e.g., AAPL, MSFT, BRK.B)
-3. **Download Data**: System opens StockRow page for data download
-4. **Analyze**: Automatic calculation of Owner Earnings
-5. **View Charts**: Generated visualizations open automatically
+3. **Download Data**: System opens StockRow page for manual data download
+4. **Process Data**: Run `python process_financial_data.py TICKER`
+5. **Analyze**: Use GUI "Calculate Owner Earnings" and "Create Visualizations" buttons
 
 ## 📊 Output Files
 

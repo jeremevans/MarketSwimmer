@@ -101,17 +101,21 @@ class AnalysisWorkflow:
             ) as progress:
                 task = progress.add_task("Calculating owner earnings...", total=None)
                 
-                calculator = OwnerEarningsCalculator()
+                # Create separate calculator instances for annual and quarterly data
+                annual_calculator = OwnerEarningsCalculator()
+                quarterly_calculator = OwnerEarningsCalculator()
                 
-                # Load and process the data
+                # Calculate annual data
                 progress.update(task, description="Loading financial data...")
-                calculator.load_financial_data(str(data_file))
+                annual_calculator.load_financial_data(str(data_file))
                 
                 progress.update(task, description="Calculating annual owner earnings...")
-                annual_results = calculator.calculate_annual_owner_earnings()
+                annual_results = annual_calculator.calculate_annual_owner_earnings()
                 
+                # Calculate quarterly data with fresh calculator
                 progress.update(task, description="Calculating quarterly owner earnings...")
-                quarterly_results = calculator.calculate_quarterly_owner_earnings()
+                quarterly_calculator.load_financial_data(str(data_file))
+                quarterly_results = quarterly_calculator.calculate_quarterly_owner_earnings()
                 
                 # Save results
                 progress.update(task, description="Saving results...")

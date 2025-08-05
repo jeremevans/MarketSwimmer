@@ -595,6 +595,9 @@ class OwnerEarningsCalculator:
     
     def calculate_annual_owner_earnings(self):
         """Calculate owner earnings using annual financial data."""
+        # Set preference for annual data processing
+        self.preferred_data_type = 'Annual'
+        
         # Load annual data specifically
         self.load_financial_statements_by_type('Annual')
         owner_earnings = self.calculate_owner_earnings()
@@ -621,6 +624,9 @@ class OwnerEarningsCalculator:
     
     def calculate_quarterly_owner_earnings(self):
         """Calculate owner earnings using quarterly financial data."""
+        # Set preference for quarterly data processing
+        self.preferred_data_type = 'Quarterly'
+        
         # Load quarterly data specifically  
         self.load_financial_statements_by_type('Quarterly')
         owner_earnings = self.calculate_owner_earnings()
@@ -628,9 +634,9 @@ class OwnerEarningsCalculator:
         # Convert to DataFrame for consistency with workflow expectations
         if owner_earnings:
             df_data = []
-            for year, data in owner_earnings.items():
+            for period, data in owner_earnings.items():
                 row = {
-                    'Period': year,
+                    'Period': period,  # Keep the quarter format like "2024Q4"
                     'Net Income': data['net_income'],
                     'Depreciation': data['depreciation'],
                     'CapEx': data['capex'],
