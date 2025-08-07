@@ -10,6 +10,7 @@ import numpy as np
 from datetime import datetime
 import os
 import glob
+import re
 
 def setup_plotting_style():
     """Set up a professional plotting style."""
@@ -47,6 +48,640 @@ def detect_ticker_symbol():
         return "TICKER"
     except:
         return "TICKER"
+
+def create_shares_outstanding_analysis(ticker, output_dir='./analysis_output'):
+    """
+    Create comprehensive analysis of shares outstanding data from downloaded financial statements.
+    
+    Args:
+        ticker (str): Stock ticker symbol
+        output_dir (str): Directory to save analysis charts
+        
+    Returns:
+        bool: True if analysis was successful, False otherwise
+    """
+    def parse_quarter_date(date_str):
+        """Convert quarter strings like "Jun '25" to readable format"""
+        try:
+            if "'" in date_str:
+                # Handle formats like "Jun '25", "Mar '24"
+                month_abbr, year_abbr = date_str.split(" '")
+                year = int("20" + year_abbr) if int(year_abbr) < 50 else int("19" + year_abbr)
+                
+                # Convert month abbreviation to quarter
+                month_to_quarter = {
+                    'Mar': 'Q1', 'Jun': 'Q2', 'Sep': 'Q3', 'Dec': 'Q4'
+                }
+                quarter = month_to_quarter.get(month_abbr, 'Q1')
+                return f"{quarter} {year}"
+            else:
+                return date_str
+        except:
+            return date_str
+    
+    try:
+        # Find the most recent downloaded file for the ticker
+        # Normalize ticker by replacing dots with underscores (e.g., BRK.B -> brk_b)
+        normalized_ticker = ticker.lower().replace('.', '_')
+        pattern = f'./downloaded_files/*{normalized_ticker}*.xlsx'
+        xlsx_files = glob.glob(pattern)
+        
+        if not xlsx_files:
+            print(f"No downloaded files found for ticker {ticker} (searched for pattern: {pattern})")
+            return False
+            
+        # Get the most recent file
+        latest_file = max(xlsx_files, key=os.path.getmtime)
+        print(f"Analyzing shares data from: {os.path.basename(latest_file)}")
+        
+        # Read Excel file
+        xl = pd.ExcelFile(latest_file)
+        
+        # Initialize data storage
+        shares_data = {}
+        issuance_data = {}  # For share issuance (positive bars)
+        repurchase_data = {}  # For share repurchase (negative bars)
+        debt_issuance_data = {}  # For debt issuance (positive bars)
+        debt_repayment_data = {}  # For debt repayment (negative bars)
+        debt_metrics_data = {}  # For debt level metrics (lines on debt chart)
+        quarterly_data = []
+        annual_data = []
+        
+        # Store stock price data for converting cash flow amounts to share counts
+        stock_price_data = {}  # Will store {date: price} mapping
+        
+        # Process each sheet - Use quarterly balance sheet AND cash flow data
+        for sheet_name in xl.sheet_names:
+            # Process quarterly balance sheet data for share counts and quarterly cash flow for issuance
+            if not ('q' in sheet_name.lower() and ('balance' in sheet_name.lower() or 'cash' in sheet_name.lower())):
+                print(f"Skipping sheet '{sheet_name}' - only using quarterly balance sheet and cash flow data")
+                continue
+                
+            try:
+                df = pd.read_excel(latest_file, sheet_name=sheet_name)
+                print(f"Processing quarterly sheet: {sheet_name}")
+                
+                # Look for share-related metrics and debt activities in quarterly data
+                share_keywords = ['share', 'outstanding', 'diluted', 'basic', 'common', 'weighted', 'stock', 'issuance', 'issued', 'repurchase', 'buyback']
+                debt_keywords = ['debt', 'borrowing', 'loan', 'bond', 'credit', 'financing']
+                all_keywords = share_keywords + debt_keywords
+                exclude_keywords = ['equity', 'liabilit', 'asset', 'book', 'value', 'price', 'market', 'treasury', 'common stock (net)', 'common stock net', 'financing cash flow']
+                
+                # Find rows with relevant keywords but exclude unwanted metrics
+                relevant_rows = df[df.iloc[:, 0].astype(str).str.contains('|'.join(all_keywords), case=False, na=False)]
+                if not relevant_rows.empty:
+                    # Filter out unwanted metrics
+                    filtered_rows = relevant_rows[~relevant_rows.iloc[:, 0].astype(str).str.contains('|'.join(re.escape(word) for word in exclude_keywords), case=False, na=False)]
+                    share_rows = filtered_rows
+                
+                if not share_rows.empty:
+                    print(f"Found {len(share_rows)} relevant metrics in {sheet_name}")
+                    for idx, row in share_rows.iterrows():
+                        metric_name = str(row.iloc[0]).strip()
+                        
+                        # Additional filtering to ensure we only get relevant metrics
+                        if any(exclude_word in metric_name.lower() for exclude_word in ['equity', 'liabilit', 'asset', 'book', 'value', 'price', 'market', 'per share', 'ratio', 'treasury', 'common stock (net)', 'common stock net', 'financing cash flow', 'financing']):
+                            continue
+                            
+                        # Process relevant metric
+                        values = row.iloc[1:].dropna()
+                        
+                        # Determine the type of metric
+                        is_share_issuance = any(keyword in metric_name.lower() for keyword in ['issuance', 'issued']) and 'share' in metric_name.lower()
+                        is_share_repurchase = any(keyword in metric_name.lower() for keyword in ['repurchase', 'buyback']) and 'share' in metric_name.lower()
+                        is_debt_issuance = any(keyword in metric_name.lower() for keyword in ['debt', 'borrowing', 'loan', 'bond']) and any(keyword in metric_name.lower() for keyword in ['issuance', 'issued', 'proceeds'])
+                        is_debt_repayment = any(keyword in metric_name.lower() for keyword in ['debt', 'borrowing', 'loan', 'bond']) and any(keyword in metric_name.lower() for keyword in ['repayment', 'payment', 'retire'])
+                        is_debt_metric = any(keyword in metric_name.lower() for keyword in ['long term debt', 'current part of debt', 'net debt', 'total debt', 'debt total'])
+                        is_share_count = any(keyword in metric_name.lower() for keyword in ['outstanding', 'diluted', 'basic', 'common shares']) and not is_debt_metric
+                        
+                        # Handle combined metrics like "Issuance/Purchase of Shares" 
+                        is_combined_share_activity = 'issuance' in metric_name.lower() and ('purchase' in metric_name.lower() or 'repurchase' in metric_name.lower())
+                        
+                        # Convert to numeric and store
+                        numeric_values = []
+                        dates = []
+                        
+                        for i, val in enumerate(values):
+                            try:
+                                if pd.notna(val) and str(val) != '—' and str(val) != '':
+                                    # Handle different number formats
+                                    if isinstance(val, str):
+                                        # Remove commas, dollar signs, and other formatting
+                                        clean_val = str(val).replace(',', '').replace('$', '').replace('%', '').strip()
+                                        if clean_val and clean_val != '—':
+                                            numeric_val = float(clean_val)
+                                        else:
+                                            continue
+                                    else:
+                                        numeric_val = float(val)
+                                    
+                                    # Apply appropriate threshold based on metric type
+                                    should_include = False
+                                    if is_share_issuance or is_share_repurchase:
+                                        should_include = abs(numeric_val) > 1  # Very low threshold for share activities
+                                    elif is_debt_issuance or is_debt_repayment:
+                                        should_include = abs(numeric_val) > 10  # Low threshold for debt activities
+                                    elif is_share_count:
+                                        should_include = numeric_val > 1000  # Higher threshold for share counts
+                                    else:
+                                        should_include = numeric_val > 100  # Default threshold
+                                    
+                                    if should_include:
+                                        numeric_values.append(numeric_val)
+                                        # Get the actual column header as date
+                                        if i + 1 < len(df.columns):
+                                            date_str = str(df.columns[i + 1])
+                                            # Parse and format the date
+                                            formatted_date = parse_quarter_date(date_str)
+                                            dates.append(formatted_date)
+                                        else:
+                                            dates.append(f"Period_{i+1}")
+                                        
+                            except (ValueError, TypeError):
+                                continue
+                        
+                        if numeric_values:
+                            key = f"{sheet_name}_{metric_name}"
+                            
+                            # Handle combined share activity metrics (like "Issuance/Purchase of Shares")
+                            if is_combined_share_activity:
+                                # Split positive and negative values based on cash flow direction
+                                positive_values = []
+                                positive_dates = []
+                                negative_values = []
+                                negative_dates = []
+                                
+                                # Note: Share issuance/repurchase bars are currently disabled for cleaner analysis
+                                print(f"  Found combined metric '{metric_name}' - bars disabled for cleaner chart")
+                                
+                                for value, date in zip(numeric_values, dates):
+                                    if value > 0:  # Positive = Net Issuance
+                                        positive_values.append(value)
+                                        positive_dates.append(date)
+                                    elif value < 0:  # Negative = Net Repurchase
+                                        negative_values.append(abs(value))  # Store as positive amount
+                                        negative_dates.append(date)
+                                
+                                # Store positive cash flows as issuance (for potential future use)
+                                if positive_values:
+                                    issuance_data[f"{key}_positive"] = {
+                                        'values': positive_values,
+                                        'dates': positive_dates,
+                                        'sheet': sheet_name,
+                                        'metric': f"{metric_name} (Issuance)"
+                                    }
+                                
+                                # Store negative cash flows as repurchase (for potential future use)
+                                if negative_values:
+                                    repurchase_data[f"{key}_negative"] = {
+                                        'values': [-v for v in negative_values],  # Make negative for chart display
+                                        'dates': negative_dates,
+                                        'sheet': sheet_name,
+                                        'metric': f"{metric_name} (Repurchase)"
+                                    }
+                            
+                            # Store in appropriate data structure for single-purpose metrics
+                            elif is_share_issuance:
+                                issuance_data[key] = {
+                                    'values': numeric_values,
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            elif is_share_repurchase:
+                                repurchase_data[key] = {
+                                    'values': [-abs(v) for v in numeric_values],  # Make negative for repurchases
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            elif is_debt_issuance:
+                                debt_issuance_data[key] = {
+                                    'values': numeric_values,
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            elif is_debt_repayment:
+                                debt_repayment_data[key] = {
+                                    'values': [-abs(v) for v in numeric_values],  # Make negative for repayments
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            elif is_debt_metric:
+                                debt_metrics_data[key] = {
+                                    'values': numeric_values,
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            else:
+                                shares_data[key] = {
+                                    'values': numeric_values,
+                                    'dates': dates,
+                                    'sheet': sheet_name,
+                                    'metric': metric_name
+                                }
+                            
+                            # Store for time series analysis
+                            if 'q' in sheet_name.lower():
+                                quarterly_data.extend([(d, v, metric_name) for d, v in zip(dates, numeric_values)])
+                            else:
+                                annual_data.extend([(d, v, metric_name) for d, v in zip(dates, numeric_values)])
+                                
+            except Exception as e:
+                print(f"Warning: Could not process sheet {sheet_name}: {str(e)}")
+                continue
+        
+        if not shares_data and not issuance_data and not repurchase_data and not debt_issuance_data and not debt_repayment_data and not debt_metrics_data:
+            print(f"No relevant share or debt data found for {ticker}")
+            return False
+        
+        # Extract stock price data from metrics ratios to convert cash flow amounts to share counts
+        try:
+            ratios_df = pd.read_excel(latest_file, sheet_name='Metrics Ratios, Q')
+            
+            # Look for Book value per Share to calculate approximate stock price
+            book_value_per_share_row = ratios_df[ratios_df.iloc[:, 0].astype(str).str.contains('Book value per Share', case=False, na=False)]
+            pb_ratio_row = ratios_df[ratios_df.iloc[:, 0].astype(str).str.contains('P/B ratio', case=False, na=False)]
+            
+            if not book_value_per_share_row.empty and not pb_ratio_row.empty:
+                # Calculate estimated stock prices for share count conversion
+                
+                # Extract book value per share data
+                bv_row = book_value_per_share_row.iloc[0]
+                pb_row = pb_ratio_row.iloc[0]
+                
+                for i in range(1, len(bv_row)):
+                    if pd.notna(bv_row.iloc[i]) and pd.notna(pb_row.iloc[i]):
+                        try:
+                            book_value = float(str(bv_row.iloc[i]).replace(',', '').replace('$', ''))
+                            pb_ratio = float(str(pb_row.iloc[i]).replace(',', '').replace('$', ''))
+                            stock_price = book_value * pb_ratio
+                            
+                            # Get the date for this column
+                            date_str = str(ratios_df.columns[i])
+                            formatted_date = parse_quarter_date(date_str)
+                            stock_price_data[formatted_date] = stock_price
+                        except (ValueError, TypeError):
+                            continue
+                            
+                print(f"Extracted stock prices for {len(stock_price_data)} periods")
+                if len(stock_price_data) > 0:
+                    # Show a few examples of the calculated stock prices
+                    sample_dates = list(stock_price_data.keys())[:3]
+                    print("Sample stock price calculations:")
+                    for date in sample_dates:
+                        print(f"  {date}: ${stock_price_data[date]:.2f}")
+            else:
+                # No stock price data available - proceed without price conversion
+                pass
+        except Exception as e:
+            print(f"Warning: Could not extract stock price data: {str(e)}")
+        
+        # Create visualizations
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Create two separate charts: one for shares, one for debt
+        plt.style.use('default')  # Clean, professional style
+        
+        # Sort dates chronologically - create a custom sort function
+        def date_sort_key(date_str):
+            """Sort dates like Q1 2023, Q2 2023, etc. chronologically"""
+            try:
+                if 'Q' in date_str and len(date_str.split()) == 2:
+                    quarter, year = date_str.split()
+                    quarter_num = int(quarter[1])  # Extract number from Q1, Q2, etc.
+                    year_num = int(year)
+                    return (year_num, quarter_num)
+                else:
+                    return (2000, 1)  # Default for unparseable dates
+            except:
+                return (2000, 1)
+        
+        # CHART 1: SHARES ANALYSIS
+        if shares_data or issuance_data or repurchase_data:
+            fig1, ax1 = plt.subplots(1, 1, figsize=(16, 10))
+            fig1.suptitle(f'{ticker.upper()} - Shares Outstanding Analysis', fontsize=24, fontweight='bold', y=0.98)
+            
+            # Add more space at the top
+            plt.subplots_adjust(top=0.92)
+            
+            # Find unique dates for shares data only
+            shares_dates = set()
+            for data_dict in [shares_data, issuance_data, repurchase_data]:
+                for data in data_dict.values():
+                    shares_dates.update(data['dates'])
+            
+            shares_timeline = sorted(list(shares_dates), key=date_sort_key)
+            shares_date_to_x = {date: i for i, date in enumerate(shares_timeline)}
+            
+            # Plot share count lines
+            colors = plt.cm.Set1(np.linspace(0, 1, min(len(shares_data), 9)))
+            
+            for i, (key, data) in enumerate(shares_data.items()):
+                values = data['values']
+                dates = data['dates']
+                
+                # Convert values to millions and sort by date chronologically
+                date_value_pairs = list(zip(dates, [v/1e6 for v in values]))
+                date_value_pairs.sort(key=lambda x: date_sort_key(x[0]))
+                
+                # Create aligned x and y data
+                x_positions = []
+                y_values = []
+                
+                for date, value in date_value_pairs:
+                    if date in shares_date_to_x:
+                        x_positions.append(shares_date_to_x[date])
+                        y_values.append(value)
+                
+                if x_positions and y_values:
+                    label = data['metric'][:40] if len(data['metric']) <= 40 else data['metric'][:37] + '...'
+                    line_styles = ['-', '--', '-.', ':', '-', '--', '-.', ':', '-']
+                    line_style = line_styles[i % len(line_styles)]
+                    
+                    ax1.plot(x_positions, y_values, marker='o', label=label, color=colors[i % len(colors)], 
+                           linewidth=3, markersize=6, linestyle=line_style, alpha=0.8)
+            
+            # Commented out share issuance and repurchase bars for cleaner analysis
+            # # Plot share issuance and repurchase bars
+            # bar_width = 0.6
+            # share_bar_data = {}
+            # 
+            # # Share issuance (positive, green bars) - Convert from dollars to shares
+            # for key, data in issuance_data.items():
+            #     for date, value in zip(data['dates'], data['values']):
+            #         if date in shares_date_to_x:
+            #             x_pos = shares_date_to_x[date]
+            #             if x_pos not in share_bar_data:
+            #                 share_bar_data[x_pos] = {'issuance': 0, 'repurchase': 0}
+            #             
+            #             # Convert from dollars to approximate shares using stock price
+            #             if date in stock_price_data and stock_price_data[date] > 0:
+            #                 shares_issued = value / stock_price_data[date]  # dollars / price per share = shares
+            #                 
+            #                 # Cap extremely large issuances (likely one-time events like IPO, SPAC, etc.)
+            #                 # Flag if issuance would represent more than 25% of outstanding shares (~50M shares)
+            #                 if shares_issued > 50e6:  # More than 50 million shares
+            #                     print(f"  Large share issuance detected in {date}: ${value/1e6:.0f}M → {shares_issued/1e6:.1f}M shares (capped at 25M)")
+            #                     shares_issued = min(shares_issued, 25e6)  # Cap at 25 million shares
+            #                 
+            #                 share_bar_data[x_pos]['issuance'] += shares_issued / 1e6  # Convert to millions
+            #             else:
+            #                 # Fallback: treat as millions of dollars if no stock price available
+            #                 share_bar_data[x_pos]['issuance'] += value / 1e6
+            # 
+            # # Share repurchase (negative, red bars) - Convert from dollars to shares
+            # for key, data in repurchase_data.items():
+            #     for date, value in zip(data['dates'], data['values']):
+            #         if date in shares_date_to_x:
+            #             x_pos = shares_date_to_x[date]
+            #             if x_pos not in share_bar_data:
+            #                 share_bar_data[x_pos] = {'issuance': 0, 'repurchase': 0}
+            #             
+            #             # Convert from dollars to approximate shares using stock price
+            #             if date in stock_price_data and stock_price_data[date] > 0:
+            #                 shares_repurchased = abs(value) / stock_price_data[date]  # dollars / price per share = shares
+            #                 
+            #                 # Cap extremely large repurchases (likely one-time events)
+            #                 if shares_repurchased > 100e6:  # More than 100 million shares
+            #                     print(f"  Large share repurchase detected in {date}: ${abs(value)/1e6:.0f}M → {shares_repurchased/1e6:.1f}M shares (capped at 50M)")
+            #                     shares_repurchased = min(shares_repurchased, 50e6)  # Cap at 50 million shares
+            #                 
+            #                 share_bar_data[x_pos]['repurchase'] += -shares_repurchased / 1e6  # Convert to millions, keep negative
+            #             else:
+            #                 # Fallback: treat as millions of dollars if no stock price available
+            #                 share_bar_data[x_pos]['repurchase'] += value / 1e6
+            # 
+            # # Plot share bars
+            # if share_bar_data:
+            #     x_positions = list(share_bar_data.keys())
+            #     issuance_vals = [share_bar_data[x]['issuance'] for x in x_positions]
+            #     repurchase_vals = [share_bar_data[x]['repurchase'] for x in x_positions]
+            #     
+            #     # Determine labels based on whether we have stock price data
+            #     if stock_price_data:
+            #         issuance_label = 'Share Issuance (Est. Shares)'
+            #         repurchase_label = 'Share Repurchase (Est. Shares)'
+            #     else:
+            #         issuance_label = 'Share Issuance ($M)'
+            #         repurchase_label = 'Share Repurchase ($M)'
+            #     
+            #     if any(v != 0 for v in issuance_vals):
+            #         ax1.bar(x_positions, issuance_vals, bar_width, label=issuance_label, color='green', alpha=0.7)
+            #     if any(v != 0 for v in repurchase_vals):
+            #         ax1.bar(x_positions, repurchase_vals, bar_width, label=repurchase_label, color='red', alpha=0.7)
+            
+            # Configure shares chart
+            ax1.set_title('Historical Shares Outstanding (Millions)', fontsize=18, fontweight='bold', pad=30)
+            ax1.set_xlabel('Time Period', fontsize=16, fontweight='bold')
+            ax1.set_ylabel('Shares (Millions)', fontsize=16, fontweight='bold')
+            
+            # Fix x-axis for shares
+            max_periods = len(shares_timeline)
+            ax1.set_xlim(-0.5, max_periods - 0.5)
+            
+            # Create proper x-tick labels - ensure we show first and last
+            if max_periods > 12:
+                step = max(1, max_periods // 8)
+                tick_positions = list(range(0, max_periods, step))
+                # Always include the last tick
+                if tick_positions[-1] != max_periods - 1:
+                    tick_positions.append(max_periods - 1)
+            else:
+                tick_positions = list(range(max_periods))
+            
+            tick_labels = [shares_timeline[i] for i in tick_positions]
+            ax1.set_xticks(tick_positions)
+            ax1.set_xticklabels(tick_labels, rotation=45, ha='right')
+            
+            ax1.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=12, frameon=True, 
+                     fancybox=True, shadow=True)
+            ax1.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+            ax1.tick_params(axis='both', which='major', labelsize=12)
+            ax1.set_facecolor('#fafafa')
+            
+            # Save shares chart
+            plt.tight_layout()
+            shares_chart_path = os.path.join(output_dir, f'{ticker}_shares_analysis.png')
+            plt.savefig(shares_chart_path, dpi=300, bbox_inches='tight')
+            plt.close(fig1)
+            print(f"Shares chart saved to: {shares_chart_path}")
+        
+        # CHART 2: DEBT ANALYSIS
+        if debt_issuance_data or debt_repayment_data or debt_metrics_data:
+            fig2, ax2 = plt.subplots(1, 1, figsize=(16, 10))
+            fig2.suptitle(f'{ticker.upper()} - Debt Activity Analysis', fontsize=24, fontweight='bold', y=0.98)
+            
+            # Add subtitle explaining data availability
+            fig2.text(0.5, 0.94, 'Note: Lines may start/end at different times based on data availability in financial reports', 
+                     ha='center', fontsize=12, style='italic', alpha=0.7)
+            
+            # Add more space at the top
+            plt.subplots_adjust(top=0.90)
+            
+            # Find unique dates for debt data including debt metrics
+            debt_dates = set()
+            for data_dict in [debt_issuance_data, debt_repayment_data, debt_metrics_data]:
+                for data in data_dict.values():
+                    debt_dates.update(data['dates'])
+            
+            debt_timeline = sorted(list(debt_dates), key=date_sort_key)
+            debt_date_to_x = {date: i for i, date in enumerate(debt_timeline)}
+            
+            # Plot debt level lines first (as background)
+            debt_colors = plt.cm.Set2(np.linspace(0, 1, min(len(debt_metrics_data), 8)))
+            
+            for i, (key, data) in enumerate(debt_metrics_data.items()):
+                values = data['values']
+                dates = data['dates']
+                
+                # Convert values to millions and sort by date chronologically
+                date_value_pairs = list(zip(dates, [v/1e6 for v in values]))
+                date_value_pairs.sort(key=lambda x: date_sort_key(x[0]))
+                
+                # Create aligned x and y data
+                x_positions = []
+                y_values = []
+                
+                for date, value in date_value_pairs:
+                    if date in debt_date_to_x:
+                        x_positions.append(debt_date_to_x[date])
+                        y_values.append(value)
+                
+                if x_positions and y_values:
+                    label = data['metric'][:40] if len(data['metric']) <= 40 else data['metric'][:37] + '...'
+                    line_styles = ['-', '--', '-.', ':', '-', '--', '-.', ':', '-']
+                    line_style = line_styles[i % len(line_styles)]
+                    
+                    ax2.plot(x_positions, y_values, marker='o', label=label, color=debt_colors[i % len(debt_colors)], 
+                           linewidth=3, markersize=6, linestyle=line_style, alpha=0.8)
+            
+            # Plot debt bars
+            bar_width = 0.6
+            debt_bar_data = {}
+            
+            # Debt issuance (positive, blue bars)
+            for key, data in debt_issuance_data.items():
+                for date, value in zip(data['dates'], data['values']):
+                    if date in debt_date_to_x:
+                        x_pos = debt_date_to_x[date]
+                        if x_pos not in debt_bar_data:
+                            debt_bar_data[x_pos] = {'issuance': 0, 'repayment': 0}
+                        debt_bar_data[x_pos]['issuance'] += value / 1e6
+            
+            # Debt repayment (negative, orange bars)
+            for key, data in debt_repayment_data.items():
+                for date, value in zip(data['dates'], data['values']):
+                    if date in debt_date_to_x:
+                        x_pos = debt_date_to_x[date]
+                        if x_pos not in debt_bar_data:
+                            debt_bar_data[x_pos] = {'issuance': 0, 'repayment': 0}
+                        debt_bar_data[x_pos]['repayment'] += value / 1e6
+            
+            # Plot debt bars
+            if debt_bar_data:
+                x_positions = list(debt_bar_data.keys())
+                debt_issuance_vals = [debt_bar_data[x]['issuance'] for x in x_positions]
+                debt_repayment_vals = [debt_bar_data[x]['repayment'] for x in x_positions]
+                
+                if any(v != 0 for v in debt_issuance_vals):
+                    ax2.bar(x_positions, debt_issuance_vals, bar_width, label='Debt Issuance', color='blue', alpha=0.7)
+                if any(v != 0 for v in debt_repayment_vals):
+                    ax2.bar(x_positions, debt_repayment_vals, bar_width, label='Debt Repayment', color='orange', alpha=0.7)
+            
+            # Configure debt chart
+            ax2.set_title('Historical Debt Activity (Millions)', fontsize=18, fontweight='bold', pad=30)
+            ax2.set_xlabel('Time Period', fontsize=16, fontweight='bold')
+            ax2.set_ylabel('Amount (Millions)', fontsize=16, fontweight='bold')
+            
+            # Fix x-axis for debt
+            max_periods = len(debt_timeline)
+            ax2.set_xlim(-0.5, max_periods - 0.5)
+            
+            # Create proper x-tick labels - ensure we show first and last
+            if max_periods > 12:
+                step = max(1, max_periods // 8)
+                tick_positions = list(range(0, max_periods, step))
+                # Always include the last tick
+                if tick_positions[-1] != max_periods - 1:
+                    tick_positions.append(max_periods - 1)
+            else:
+                tick_positions = list(range(max_periods))
+            
+            tick_labels = [debt_timeline[i] for i in tick_positions]
+            ax2.set_xticks(tick_positions)
+            ax2.set_xticklabels(tick_labels, rotation=45, ha='right')
+            
+            ax2.legend(bbox_to_anchor=(1.02, 1), loc='upper left', fontsize=12, frameon=True, 
+                     fancybox=True, shadow=True)
+            ax2.grid(True, alpha=0.3, linestyle='-', linewidth=0.5)
+            ax2.tick_params(axis='both', which='major', labelsize=12)
+            ax2.set_facecolor('#fafafa')
+            
+            # Save debt chart
+            plt.tight_layout()
+            debt_chart_path = os.path.join(output_dir, f'{ticker}_debt_analysis.png')
+            plt.savefig(debt_chart_path, dpi=300, bbox_inches='tight')
+            plt.close(fig2)
+            print(f"Debt chart saved to: {debt_chart_path}")
+        
+        # Print detailed summary to console
+        print(f"\n=== {ticker.upper()} SHARES OUTSTANDING SUMMARY ===")
+        
+        # Group by sheet type for better organization
+        balance_sheet_data = {}
+        income_statement_data = {}
+        other_data = {}
+        
+        for key, data in shares_data.items():
+            sheet = data['sheet'].lower()
+            metric = data['metric']
+            current = data['values'][0] if data['values'] else 0
+            
+            if 'balance' in sheet:
+                balance_sheet_data[metric] = current
+            elif 'income' in sheet:
+                income_statement_data[metric] = current
+            else:
+                other_data[metric] = current
+        
+        if balance_sheet_data:
+            print("\nBalance Sheet (Shares Outstanding):")
+            for metric, value in balance_sheet_data.items():
+                print(f"  {metric}: {value:,.0f} shares ({value/1e6:.1f}M)")
+        
+        if income_statement_data:
+            print("\nIncome Statement (Weighted Average Shares):")
+            for metric, value in income_statement_data.items():
+                print(f"  {metric}: {value:,.0f} shares ({value/1e6:.1f}M)")
+        
+        if other_data:
+            print("\nOther Share Metrics:")
+            for metric, value in other_data.items():
+                print(f"  {metric}: {value:,.0f} shares ({value/1e6:.1f}M)")
+        
+        # Key insights
+        print(f"\n=== KEY INSIGHTS ===")
+        if balance_sheet_data and income_statement_data:
+            balance_max = max(balance_sheet_data.values()) if balance_sheet_data else 0
+            income_max = max(income_statement_data.values()) if income_statement_data else 0
+            
+            if balance_max > income_max * 1.1:  # More than 10% difference
+                print(f"NOTICE: Balance sheet shows {balance_max/1e6:.1f}M shares outstanding")
+                print(f"        Income statement shows {income_max/1e6:.1f}M weighted average shares")
+                print(f"        Difference: {(balance_max-income_max)/1e6:.1f}M shares ({((balance_max-income_max)/income_max*100):.1f}%)")
+                print("        This suggests significant share issuance during reporting periods")
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error in shares outstanding analysis: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return False
 
 def load_data(ticker=None):
     """Load both annual and quarterly CSV data for a specific ticker."""
@@ -526,7 +1161,7 @@ def create_annual_waterfall_chart(ax, df, ticker):
     ax.set_title(f'{ticker} Annual Owner Earnings Waterfall - All Years', fontweight='bold', fontsize=16)
     ax.set_ylabel('Amount ($ Millions)')
     
-    # Create custom legend to show both positive and negative WC changes
+    # Create custom legend to show both positive and negative WC changes and Owner Earnings
     from matplotlib.patches import Patch
     legend_elements = [
         Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
@@ -534,7 +1169,8 @@ def create_annual_waterfall_chart(ax, df, ticker):
         Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
         Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
         Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
-        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings')
+        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings (+)'),
+        Patch(facecolor='#F44336', alpha=0.8, label='Owner Earnings (-)')
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=10)
     
@@ -645,6 +1281,7 @@ def create_waterfall_chart(ax, df, ticker):
     ax.set_ylabel('Amount ($ Millions)')
     
     # Create custom legend to show both positive and negative WC changes
+    # Create custom legend to show all components including negative owner earnings
     from matplotlib.patches import Patch
     legend_elements = [
         Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
@@ -652,7 +1289,8 @@ def create_waterfall_chart(ax, df, ticker):
         Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
         Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
         Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
-        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings')
+        Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings (+)'),
+        Patch(facecolor='#F44336', alpha=0.8, label='Owner Earnings (-)')
     ]
     ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
     

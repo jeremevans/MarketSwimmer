@@ -22,7 +22,7 @@ console = Console()
 # Create the main Typer app
 app = typer.Typer(
     name="marketswimmer",
-    help="🏊 MarketSwimmer - Warren Buffett's Owner Earnings Analysis Tool",
+    help="MarketSwimmer - Warren Buffett's Owner Earnings Analysis Tool",
     epilog="For more help on a specific command, use: marketswimmer COMMAND --help",
     rich_markup_mode="rich"
 )
@@ -78,7 +78,7 @@ def gui(
         time.sleep(1)  # Brief delay for visual feedback
     
     if safe_mode:
-        console.print("[yellow]🔍 Checking for existing GUI processes...[/yellow]")
+        console.print("[yellow]CHECKING: Looking for existing GUI processes...[/yellow]")
         # Check for existing processes (simplified)
         try:
             result = subprocess.run(['tasklist', '/FI', 'WINDOWTITLE eq MarketSwimmer*'], 
@@ -292,7 +292,7 @@ def version():
     """
     console.print("[bold blue]>> MarketSwimmer Version Information[/bold blue]\n")
     
-    console.print("Version: [green]2.0.0[/green] (CLI Edition)")
+    console.print("Version: [green]2.4.1[/green] (CLI Edition)")
     console.print("Built with: [cyan]Typer + Rich[/cyan]")
     console.print("Purpose: [yellow]Warren Buffett's Owner Earnings Analysis[/yellow]")
     console.print(f"Working Directory: [blue]{Path.cwd()}[/blue]")
@@ -315,17 +315,101 @@ def version():
         console.print("Matplotlib: [red]Not installed[/red]")
 
 @app.command()
+def fair_value(
+    ticker: str = typer.Argument(..., help="Stock ticker symbol (e.g., BRK.B, LNC, AAPL)"),
+    report: bool = typer.Option(True, "--report/--no-report", help="Save detailed report file")
+):
+    """
+    Calculate enhanced fair value with balance sheet analysis
+    
+    This command performs comprehensive fair value analysis including:
+    - Automatic preferred stock detection
+    - Balance sheet adjustments (cash, debt, preferred shares)
+    - Insurance company methodology 
+    - Scenario analysis with multiple discount rates
+    - Detailed valuation report
+    
+    Examples:
+        marketswimmer fair-value LNC    # Analyze Lincoln National
+        marketswimmer fair-value BRK.B --no-report  # Skip saving report
+    """
+    try:
+        console.print(f"[bold blue]>> Enhanced Fair Value Analysis for {ticker.upper()}[/bold blue]")
+        
+        # Import the fair value calculator
+        from .core.fair_value import FairValueCalculator
+        
+        # Run enhanced analysis
+        calculator = FairValueCalculator()
+        results = calculator.enhanced_fair_value_analysis(ticker, save_detailed_report=report)
+        
+        console.print("\n[bold green]>> Fair value analysis completed successfully![/bold green]")
+        
+        if report:
+            console.print("[dim]>> Detailed report saved to current directory[/dim]")
+        
+    except ImportError as e:
+        console.print(f"[red]ERROR: Could not import fair value calculator: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]ERROR: Fair value calculation failed: {e}[/red]")
+        console.print("[yellow]TIP: Make sure owner earnings data exists first (run 'analyze' command)[/yellow]")
+        raise typer.Exit(1)
+
+@app.command(name="enhanced-fair-value")
+def enhanced_fair_value(
+    ticker: str = typer.Argument(..., help="Stock ticker symbol (e.g., BRK.B, LNC, AAPL)"),
+    report: bool = typer.Option(True, "--report/--no-report", help="Save detailed report file")
+):
+    """
+    Calculate enhanced fair value with balance sheet analysis
+    
+    This command performs comprehensive fair value analysis including:
+    - Automatic preferred stock detection
+    - Balance sheet adjustments (cash, debt, preferred shares)
+    - Insurance company methodology 
+    - Scenario analysis with multiple discount rates
+    - Detailed valuation report
+    
+    Examples:
+        marketswimmer enhanced-fair-value LNC    # Analyze Lincoln National
+        marketswimmer enhanced-fair-value BRK.B --no-report  # Skip saving report
+    """
+    try:
+        console.print(f"[bold blue]>> Enhanced Fair Value Analysis for {ticker.upper()}[/bold blue]")
+        
+        # Import the fair value calculator
+        from .core.fair_value import FairValueCalculator
+        
+        # Run enhanced analysis
+        calculator = FairValueCalculator()
+        results = calculator.enhanced_fair_value_analysis(ticker, save_detailed_report=report)
+        
+        console.print("\n[bold green]>> Fair value analysis completed successfully![/bold green]")
+        
+        if report:
+            console.print("[dim]>> Detailed report saved to current directory[/dim]")
+        
+    except ImportError as e:
+        console.print(f"[red]ERROR: Could not import fair value calculator: {e}[/red]")
+        raise typer.Exit(1)
+    except Exception as e:
+        console.print(f"[red]ERROR: Fair value calculation failed: {e}[/red]")
+        console.print("[yellow]TIP: Make sure owner earnings data exists first (run 'analyze' command)[/yellow]")
+        raise typer.Exit(1)
+
+@app.command()
 def calculate(
     ticker: str = typer.Option(..., "--ticker", "-t", help="Stock ticker symbol"),
     force: bool = typer.Option(False, "--force", "-f", help="Force recalculation")
 ):
     """
-    🧮 Calculate owner earnings for a specific ticker
+    Calculate owner earnings for a specific ticker
     
     This command calculates Warren Buffett's owner earnings from financial data.
     Requires financial data to be available in the data/ directory.
     """
-    console.print(f"[bold blue]🧮 Calculating owner earnings for {ticker.upper()}...[/bold blue]")
+    console.print(f"[bold blue]Calculating owner earnings for {ticker.upper()}...[/bold blue]")
     
     try:
         from .core.owner_earnings import OwnerEarningsCalculator
@@ -341,6 +425,149 @@ def calculate(
         
     except ImportError as e:
         console.print(f"[red]ERROR: Cannot import OwnerEarningsCalculator: {e}[/red]")
+
+
+@app.command()
+def fair_value(
+    ticker: str = typer.Option(..., "--ticker", "-t", help="Stock ticker symbol"),
+    growth_rate: float = typer.Option(0.02, "--growth", "-g", help="Annual growth rate (e.g., 0.02 for 2%)"),
+    discount_rate: Optional[float] = typer.Option(None, "--discount", "-d", help="Discount rate (uses 10Y Treasury if not specified)"),
+    terminal_multiple: float = typer.Option(15.0, "--terminal", help="Terminal value P/E multiple"),
+    cash: Optional[float] = typer.Option(None, "--cash", help="Cash and short-term investments (auto-extracted if not provided)"),
+    debt: Optional[float] = typer.Option(None, "--debt", help="Total debt (auto-extracted if not provided)"),
+    shares: Optional[float] = typer.Option(None, "--shares", help="Shares outstanding in millions (auto-extracted if not provided)"),
+    scenarios: bool = typer.Option(True, "--scenarios/--no-scenarios", help="Include scenario analysis"),
+    manual: bool = typer.Option(False, "--manual", help="Force manual input mode (disable auto-extraction)")
+):
+    """
+    Calculate fair value using Owner Earnings DCF methodology
+    
+    This command calculates intrinsic value by:
+    1. Using 10-year average Owner Earnings as future cash flow
+    2. Discounting at 10-year Treasury rate (or specified rate)
+    3. AUTO-EXTRACTING cash/debt/shares from downloaded data (NEW!)
+    4. Calculating per-share fair value
+    
+    Example (auto-extraction):
+    ms fair-value --ticker AAPL --growth 0.03
+    
+    Example (manual mode):
+    ms fair-value --ticker AAPL --growth 0.03 --cash 100000000000 --debt 20000000000 --shares 15000 --manual
+    """
+    console.print(f"[bold green]Fair Value Analysis for {ticker.upper()}[/bold green]")
+    
+    try:
+        from .core.fair_value import FairValueCalculator
+        from pathlib import Path
+        
+        # Look for owner earnings data
+        data_folder = Path("data")
+        clean_ticker = ticker.replace('.', '_').upper()
+        
+        annual_file = data_folder / f"owner_earnings_annual_{clean_ticker.lower()}.csv"
+        
+        if not annual_file.exists():
+            console.print(f"[red]ERROR: Owner earnings data not found for {ticker.upper()}[/red]")
+            console.print(f"[yellow]Expected file: {annual_file}[/yellow]")
+            console.print(f"[yellow]TIP: Run 'ms analyze {ticker}' first to generate owner earnings data[/yellow]")
+            return
+        
+        # Initialize calculator and load data
+        calculator = FairValueCalculator()
+        calculator.company_name = ticker.upper()
+        
+        if not calculator.load_owner_earnings_data(str(annual_file)):
+            console.print(f"[red]ERROR: Failed to load owner earnings data[/red]")
+            return
+        
+        # Calculate 10-year average
+        avg_earnings = calculator.calculate_average_owner_earnings(years=10)
+        if avg_earnings is None:
+            console.print(f"[red]ERROR: Insufficient owner earnings data for analysis[/red]")
+            return
+        
+        # Auto-extract balance sheet data unless manual mode or values provided
+        if not manual and (cash is None or debt is None or shares is None):
+            console.print(f"\n[bold blue]Auto-Extracting Balance Sheet Data[/bold blue]")
+            
+            # Use automatic extraction method
+            base_results = calculator.calculate_fair_value_auto(
+                ticker=ticker,
+                average_owner_earnings=avg_earnings,
+                discount_rate=discount_rate,
+                growth_rate=growth_rate,
+                terminal_multiple=terminal_multiple
+            )
+            
+        else:
+            # Use manual/provided values
+            console.print(f"\n[bold blue]Manual Balance Sheet Mode[/bold blue]")
+            
+            # Convert shares from millions to actual count if provided
+            shares_actual = shares * 1_000_000 if shares else None
+            
+            # Use provided values or defaults
+            cash_value = cash if cash is not None else 0
+            debt_value = debt if debt is not None else 0
+            
+            console.print(f"Using provided values:")
+            console.print(f"   Cash & Investments: ${cash_value:,.0f}")
+            console.print(f"   Total Debt: ${debt_value:,.0f}")
+            if shares_actual:
+                console.print(f"   Shares Outstanding: {shares_actual:,.0f}")
+            
+            base_results = calculator.calculate_fair_value(
+                average_owner_earnings=avg_earnings,
+                discount_rate=discount_rate,
+                growth_rate=growth_rate,
+                terminal_multiple=terminal_multiple,
+                cash_and_investments=cash_value,
+                total_debt=debt_value,
+                shares_outstanding=shares_actual
+            )
+        
+        # Show key results
+        console.print(f"\n[bold green]FAIR VALUE SUMMARY[/bold green]")
+        console.print(f"Enterprise Value: [green]${base_results['enterprise_value']:,.0f}[/green]")
+        console.print(f"Equity Value: [green]${base_results['equity_value']:,.0f}[/green]")
+        
+        if base_results['fair_value_per_share']:
+            console.print(f"Fair Value per Share: [bold green]${base_results['fair_value_per_share']:,.2f}[/bold green]")
+        
+        # Scenario analysis
+        if scenarios:
+            console.print(f"\n[bold blue]Scenario Analysis[/bold blue]")
+            
+            # For scenarios, use the extracted/provided balance sheet data
+            cash_for_scenarios = base_results['cash_and_investments']
+            debt_for_scenarios = base_results['total_debt']
+            shares_for_scenarios = base_results['shares_outstanding']
+            
+            scenario_df = calculator.create_scenario_analysis(
+                average_owner_earnings=avg_earnings,
+                shares_outstanding=shares_for_scenarios,
+                cash_and_investments=cash_for_scenarios,
+                total_debt=debt_for_scenarios
+            )
+            
+            # Display scenario table
+            if base_results['fair_value_per_share']:
+                console.print(f"\n[bold]Per-Share Fair Values:[/bold]")
+                for _, row in scenario_df.iterrows():
+                    if 'Fair Value per Share' in row:
+                        console.print(f"  {row['Scenario']}: [green]${row['Fair Value per Share']:,.2f}[/green]")
+        
+        # Save report
+        report_file = data_folder / f"fair_value_analysis_{clean_ticker.lower()}.txt"
+        calculator.save_valuation_report(base_results, scenario_df if scenarios else None, str(report_file))
+        
+        console.print(f"\n[green]SUCCESS: Fair value analysis complete![/green]")
+        console.print(f"[dim]Report saved to: {report_file}[/dim]")
+        
+    except ImportError as e:
+        console.print(f"[red]ERROR: Cannot import FairValueCalculator: {e}[/red]")
+    except Exception as e:
+        console.print(f"[red]ERROR: Fair value calculation failed: {e}[/red]")
 
 @app.command()
 def visualize(
@@ -389,6 +616,42 @@ def visualize(
         
     except Exception as e:
         console.print(f"[red]ERROR: Error during visualization: {e}[/red]")
+
+@app.command()
+def shares_analysis(
+    ticker: str = typer.Option(None, "--ticker", "-t", help="Stock ticker symbol"),
+):
+    """
+    Create comprehensive shares outstanding analysis and visualization.
+    
+    This command analyzes all share-related metrics from downloaded financial data,
+    including basic shares, diluted shares, weighted averages, and share classes.
+    Creates detailed visualization showing share count evolution and dilution analysis.
+    
+    Example:
+    ms shares-analysis --ticker CVNA
+    """
+    try:
+        from .visualization.charts import create_shares_outstanding_analysis
+        
+        if not ticker:
+            ticker = typer.prompt("Enter ticker symbol")
+        
+        console.print(f"[bold blue]Analyzing shares outstanding for {ticker.upper()}[/bold blue]")
+        
+        result = create_shares_outstanding_analysis(ticker.upper())
+        
+        if result:
+            console.print(f"\n[bold green]SUCCESS: Shares analysis complete![/bold green]")
+            console.print(f"Analysis saved to: ./analysis_output/{ticker.lower()}_shares_analysis.png")
+        else:
+            console.print(f"[bold red]ERROR: Failed to analyze shares for {ticker}[/bold red]")
+            console.print("Make sure you have downloaded financial data first.")
+            
+    except ImportError:
+        console.print("[red]Error: Visualization dependencies not available[/red]")
+    except Exception as e:
+        console.print(f"[red]Error in shares analysis: {e}[/red]")
 
 def main():
     """Main entry point for the CLI."""

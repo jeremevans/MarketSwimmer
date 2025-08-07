@@ -24,13 +24,15 @@ Usage:
     results = calculator.calculate_owner_earnings()
 """
 
-__version__ = "2.2.0"
+__version__ = "2.4.1"
 __author__ = "Jeremy Evans"
 __email__ = "jeremyevans@hey.com"
 __license__ = "MIT"
 
 # Import main classes for easy access
 from .core.owner_earnings import OwnerEarningsCalculator
+from .core.fair_value import FairValueCalculator
+
 # Lazy import for visualization to avoid dependency issues when matplotlib/PyQt6 not available
 try:
     from .visualization import OwnerEarningsVisualizer
@@ -44,6 +46,7 @@ from .cli import main as cli_main
 # Define what gets imported with "from marketswimmer import *"
 __all__ = [
     "OwnerEarningsCalculator",
+    "FairValueCalculator",
     "OwnerEarningsVisualizer", 
     "cli_main",
     "__version__",

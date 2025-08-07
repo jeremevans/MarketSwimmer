@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: marketswimmer
-Version: 2.2.2
+Version: 2.4.1
 Summary: Warren Buffett's Owner Earnings Analysis Tool - Calculate true economic earnings for any stock
 Home-page: https://github.com/jeremevans/MarketSwimmer
 Author: Jeremy Evans
@@ -51,21 +51,45 @@ Dynamic: requires-python
 
 # MarketSwimmer - Owner Earnings Analysis Tool 🏊‍♂️📈
 
+A comprehensive tool for analyzing Warren Buffett's "Owner Earnings" from financial statement data with **NEW Fair Value Calculation** using DCF methodology.
+
+## 🆕 **v2.2.3 - Fair Value Analysis**
+
+**NEW FEATURE**: Calculate intrinsic fair value using Owner Earnings DCF methodology!
+
+- 📊 **DCF Analysis**: Uses 10-year average Owner Earnings as future cash flow
+- 💰 **Fair Value Calculation**: Discounts cash flows using 10-year Treasury rate
+- 🎯 **Scenario Analysis**: Conservative, Base Case, Optimistic, and Pessimistic valuations
+- 💡 **Balance Sheet Adjustments**: Accounts for cash, investments, and debt
+- 📈 **Per-Share Valuation**: Calculates intrinsic value per share
+- 🖥️ **GUI Integration**: Easy-to-use interface with input dialogs
+- 💻 **CLI Support**: Full command-line interface for power users
+
+### Quick Fair Value Example:
+
+````bash
+# Calculate fair value for Apple
+ms fair-value --ticker AAPL --growth 0.03 --cash 100000000000 --debt 20000000000 --shares 15000
+
+# Or use the GUI
+ms gui
+```ketSwimmer - Owner Earnings Analysis Tool 🏊‍♂️📈
+
 A comprehensive tool for analyzing Warren Buffett's "Owner Earnings" from financial statement data.
 
 ## � **v2.1.0 - What's New**
 
-✅ **Complete Data Processing Pipeline**: Automated XLSX-to-CSV conversion for seamless workflow  
-✅ **Real Quarterly Data**: Proper quarter-by-quarter financial analysis (not just annual duplicates)  
-✅ **Professional Visualizations**: 3 chart types with recent years focus  
-✅ **Smart Download Detection**: Automatically detects XLSX files in Downloads folder  
+✅ **Complete Data Processing Pipeline**: Automated XLSX-to-CSV conversion for seamless workflow
+✅ **Real Quarterly Data**: Proper quarter-by-quarter financial analysis (not just annual duplicates)
+✅ **Professional Visualizations**: 3 chart types with recent years focus
+✅ **Smart Download Detection**: Automatically detects XLSX files in Downloads folder
 ✅ **Clean Color Scheme**: Improved white/blue theme for better readability
 
 ## 📦 **Installation**
 
 ```bash
 pip install marketswimmer
-```
+````
 
 ## � Quick Start
 

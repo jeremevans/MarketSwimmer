@@ -19,7 +19,7 @@ def read_requirements():
 
 setup(
     name="marketswimmer",
-    version="2.0.16",
+    version="2.4.1",
     author="Jeremy Evans",
     author_email="jeremyevans@hey.com",
     description="Warren Buffett's Owner Earnings Analysis Tool - Calculate true economic earnings for any stock",

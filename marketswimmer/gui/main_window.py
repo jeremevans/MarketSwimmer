@@ -272,21 +272,9 @@ class MarketSwimmerGUI(QMainWindow):
         analysis_group = QGroupBox("Analysis Options")
         analysis_layout = QGridLayout(analysis_group)
         
-        # Individual analysis buttons
-        self.download_button = QPushButton("Download Financial Data")
-        self.download_button.clicked.connect(self.download_data)
-        self.download_button.setEnabled(False)
-        
-        self.earnings_button = QPushButton("Calculate Owner Earnings")
-        self.earnings_button.clicked.connect(self.calculate_earnings)
-        self.earnings_button.setEnabled(False)
-        
-        self.visualize_button = QPushButton("Create Visualizations")
-        self.visualize_button.clicked.connect(self.create_visualizations)
-        self.visualize_button.setEnabled(False)
-        
-        self.complete_button = QPushButton("Complete Analysis")
-        self.complete_button.clicked.connect(self.run_full_analysis)
+        # Complete analysis button (only button needed)
+        self.complete_button = QPushButton("Complete Analysis (All Steps)")
+        self.complete_button.clicked.connect(self.run_complete_analysis)
         self.complete_button.setEnabled(False)
         self.complete_button.setStyleSheet("""
             QPushButton {
@@ -310,10 +298,7 @@ class MarketSwimmerGUI(QMainWindow):
         """)
         
         # Arrange buttons in grid
-        analysis_layout.addWidget(self.download_button, 0, 0)
-        analysis_layout.addWidget(self.earnings_button, 0, 1)
-        analysis_layout.addWidget(self.visualize_button, 1, 0)
-        analysis_layout.addWidget(self.complete_button, 1, 1)
+        analysis_layout.addWidget(self.complete_button, 0, 0, 1, 2)  # Span 2 columns  # Complete analysis button
         
         # Add Open Charts Folder button
         self.open_charts_button = QPushButton("Open Charts Folder")
@@ -394,26 +379,28 @@ class MarketSwimmerGUI(QMainWindow):
             self.current_ticker = ticker
             self.ticker_label.setText(f"Selected Ticker: {ticker}")
             
-            # Enable analysis buttons
-            self.download_button.setEnabled(True)
-            self.earnings_button.setEnabled(True)
-            self.visualize_button.setEnabled(True)
+            # Enable complete analysis button
             self.complete_button.setEnabled(True)
             
             self.console_output.append(f">> Ticker selected: {ticker}")
-            self.statusBar().showMessage(f"Ticker selected: {ticker} - Ready for analysis")
+            self.statusBar().showMessage(f"Ticker selected: {ticker} - Ready for complete analysis")
             
             logger.info(f"Ticker selected: {ticker}")
 
-    def download_data(self):
+    def download_and_analyze(self):
+        """Download financial data and perform owner earnings analysis with visualizations."""
         if not self.current_ticker:
             QMessageBox.warning(self, "Warning", "Please select a ticker first.")
             return
             
-        log_gui_event("BUTTON_CLICK", "Download Data button clicked")
-        logger.info(f"Starting data download for ticker: {self.current_ticker}")
+        log_gui_event("BUTTON_CLICK", "Download & Process Data button clicked")
+        logger.info(f"Starting data download and analysis for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n>> Starting data download for {self.current_ticker}...")
+        self.console_output.append(f"\n>> Starting data download and analysis for {self.current_ticker}...")
+        self.console_output.append("This will:")
+        self.console_output.append("  1. Download financial data from StockRow")
+        self.console_output.append("  2. Calculate owner earnings")
+        self.console_output.append("  3. Create visualizations")
         self.console_output.append("🌐 Opening browser for download...")
         self.console_output.append("📥 Will monitor Downloads folder for new XLSX files...")
         self.console_output.append("⏱️ Timeout: 5 minutes (plenty of time for manual download)")
@@ -428,25 +415,150 @@ class MarketSwimmerGUI(QMainWindow):
         self.worker_thread.error_signal.connect(self.on_download_timeout)
         self.worker_thread.start()
 
-    def calculate_earnings(self):
+    def run_complete_analysis(self):
+        """Run the complete analysis workflow including enhanced fair value calculation."""
         if not self.current_ticker:
             QMessageBox.warning(self, "Warning", "Please select a ticker first.")
             return
             
-        log_gui_event("BUTTON_CLICK", "Calculate Earnings button clicked")
-        logger.info(f"Starting earnings calculation for ticker: {self.current_ticker}")
+        log_gui_event("BUTTON_CLICK", "Complete Analysis button clicked")
+        logger.info(f"Starting complete analysis for ticker: {self.current_ticker}")
         
-        self.console_output.append(f"\n>> Processing downloaded data for {self.current_ticker}...")
-        self.console_output.append(">> Converting XLSX files to analysis format...")
+        self.console_output.append(f"\n>> Starting COMPLETE analysis for {self.current_ticker}...")
+        self.console_output.append("This will run ALL steps in sequence:")
+        self.console_output.append("  1. Download financial data from StockRow")
+        self.console_output.append("  2. Calculate owner earnings")
+        self.console_output.append("  3. Calculate enhanced fair value (with balance sheet analysis)")
+        self.console_output.append("  4. Create visualizations")
+        self.console_output.append("  5. Generate shares and debt analysis")
+        self.console_output.append("🌐 Opening browser for download...")
+        self.console_output.append("📥 Will monitor Downloads folder for new XLSX files...")
+        self.console_output.append("⏱️ Timeout: 5 minutes (plenty of time for manual download)")
+        self.console_output.append("Please wait...\n")
+        
         self.disable_buttons()
         self.show_progress()
         
-        # First process the downloaded XLSX files
-        command = f'python process_financial_data.py {self.current_ticker}'
-        self.worker_thread = WorkerThread(command, timeout=30)
+        # First run the complete analysis (includes enhanced fair value)
+        command = f'python -m marketswimmer analyze {self.current_ticker} --force'
+        logger.info(f"Complete analysis command: {command}")
+        
+        self.worker_thread = WorkerThread(command, timeout=300)
         self.worker_thread.output_signal.connect(self.update_console)
-        self.worker_thread.finished_signal.connect(self.on_data_processed)
+        self.worker_thread.finished_signal.connect(self.on_complete_analysis_phase1_finished)
         self.worker_thread.error_signal.connect(self.on_process_error)
+        self.worker_thread.start()
+
+    def calculate_fair_value(self):
+        if not self.current_ticker:
+            QMessageBox.warning(self, "Warning", "Please select a ticker first.")
+            return
+            
+        log_gui_event("BUTTON_CLICK", "Calculate Fair Value button clicked")
+        logger.info(f"Starting fair value calculation for ticker: {self.current_ticker}")
+        
+        # Check if owner earnings data exists
+        data_folder = Path("data")
+        clean_ticker = self.current_ticker.replace('.', '_').upper()
+        annual_file = data_folder / f"owner_earnings_annual_{clean_ticker.lower()}.csv"
+        
+        if not annual_file.exists():
+            QMessageBox.warning(self, "Missing Data", 
+                              f"Owner earnings data not found for {self.current_ticker}.\n"
+                              f"Please calculate owner earnings first.")
+            return
+        
+        # Ask user which analysis mode they want
+        from PyQt6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(self, "Fair Value Analysis Mode", 
+                                   "Choose your fair value analysis method:\n\n"
+                                   "• YES: Enhanced Analysis (Recommended)\n"
+                                   "  - Automatic preferred stock detection\n"
+                                   "  - Insurance company methodology\n"
+                                   "  - Comprehensive scenario analysis\n"
+                                   "  - Detailed balance sheet breakdown\n\n"
+                                   "• NO: Manual Analysis (Legacy)\n"
+                                   "  - Enter values manually\n"
+                                   "  - Basic calculation only",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                   QMessageBox.StandardButton.Yes)
+        
+        use_enhanced_analysis = (reply == QMessageBox.StandardButton.Yes)
+        
+        if use_enhanced_analysis:
+            # Use enhanced analysis - no additional inputs needed
+            self.console_output.append(f"\n>> Starting enhanced fair value analysis for {self.current_ticker}...")
+            self.console_output.append(f">> This includes automatic balance sheet detection and scenario analysis")
+            
+            command = f'python -m marketswimmer enhanced-fair-value {self.current_ticker} --no-report'
+            
+        else:
+            # Legacy manual mode
+            # Get growth rate (always required)
+            growth_rate, ok1 = QInputDialog.getDouble(self, "Growth Rate", 
+                                                     "Enter annual growth rate (e.g., 0.02 for 2%):", 
+                                                     0.02, -0.1, 0.2, 3)
+            if not ok1:
+                return
+            
+            # Ask if user wants to use automatic extraction or manual input
+            reply2 = QMessageBox.question(self, "Data Input Mode", 
+                                       "Do you want to automatically extract balance sheet data from downloaded files?\n\n"
+                                       "• YES: Auto-extract cash, debt, and shares from XLSX files\n"
+                                       "• NO: Manually enter values",
+                                       QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                       QMessageBox.StandardButton.Yes)
+            
+            use_auto_extraction = (reply2 == QMessageBox.StandardButton.Yes)
+            
+            # Build command based on mode
+            if use_auto_extraction:
+                self.console_output.append(f"\n>> Calculating fair value for {self.current_ticker} (AUTO-EXTRACTION MODE)...")
+                self.console_output.append(f">> Growth Rate: {growth_rate:.1%}")
+                self.console_output.append(f">> Auto-extracting cash, debt, and shares from downloaded data...")
+                
+                command = (f'python -m marketswimmer fair-value --ticker {self.current_ticker} '
+                          f'--growth {growth_rate}')
+            else:
+                # Manual input mode - get all values
+                cash_investments, ok2 = QInputDialog.getDouble(self, "Cash & Investments", 
+                                                              "Enter cash and short-term investments ($):", 
+                                                              0, 0, 1e12, 0)
+                if not ok2:
+                    return
+                    
+                total_debt, ok3 = QInputDialog.getDouble(self, "Total Debt", 
+                                                        "Enter total debt ($):", 
+                                                        0, 0, 1e12, 0)
+                if not ok3:
+                    return
+                    
+                shares_millions, ok4 = QInputDialog.getDouble(self, "Shares Outstanding", 
+                                                             "Enter shares outstanding (millions):", 
+                                                             1000, 1, 100000, 0)
+                if not ok4:
+                    return
+                
+                self.console_output.append(f"\n>> Calculating fair value for {self.current_ticker} (MANUAL MODE)...")
+                self.console_output.append(f">> Growth Rate: {growth_rate:.1%}")
+                self.console_output.append(f">> Cash & Investments: ${cash_investments:,.0f}")
+                self.console_output.append(f">> Total Debt: ${total_debt:,.0f}")
+                self.console_output.append(f">> Shares Outstanding: {shares_millions:,.0f}M")
+                
+                command = (f'python -m marketswimmer fair-value --ticker {self.current_ticker} '
+                          f'--growth {growth_rate} '
+                          f'--cash {cash_investments} '
+                          f'--debt {total_debt} '
+                          f'--shares {shares_millions} '
+                          f'--manual')
+        
+        self.disable_buttons()
+        self.show_progress()
+        
+        self.worker_thread = WorkerThread(command, timeout=120)  # Increased timeout for enhanced analysis
+        self.worker_thread.output_signal.connect(self.update_console)
+        self.worker_thread.finished_signal.connect(self.on_fair_value_finished)
+        self.worker_thread.error_signal.connect(self.on_fair_value_error)
         self.worker_thread.start()
 
     def create_visualizations(self):
@@ -466,36 +578,65 @@ class MarketSwimmerGUI(QMainWindow):
         command = f'python -m marketswimmer visualize --ticker {self.current_ticker}'
         self.run_command(command)
 
-    def run_full_analysis(self):
-        if not self.current_ticker:
-            QMessageBox.warning(self, "Warning", "Please select a ticker first.")
-            return
-            
-        log_gui_event("BUTTON_CLICK", "Complete Analysis button clicked")
-        logger.info(f"Starting complete analysis for ticker: {self.current_ticker}")
+    def on_complete_analysis_phase1_finished(self):
+        """Handle completion of complete analysis workflow (enhanced fair value already included)."""
+        self.console_output.append("\n✓ COMPLETE ANALYSIS FINISHED!")
+        self.console_output.append("Check these directories for results:")
+        self.console_output.append("  >> data/ - CSV files with financial analysis")
+        self.console_output.append("  >> charts/ - PNG charts and visualizations") 
+        self.console_output.append("  >> analysis_output/ - Shares and debt analysis charts")
+        self.console_output.append("  >> downloaded_files/ - Raw Excel data")
+        self.console_output.append("  >> Enhanced fair value report (TXT file with timestamp)")
+        self.console_output.append("")
+        self.console_output.append(">> All analysis steps completed successfully!")
+        self.console_output.append(">> ENHANCED FAIR VALUE ANALYSIS INCLUDES:")
+        self.console_output.append("   ✓ Automatic balance sheet data extraction")
+        self.console_output.append("   ✓ Cash & Short-term Investments analysis")
+        self.console_output.append("   ✓ Total Debt analysis") 
+        self.console_output.append("   ✓ Common Shares Outstanding")
+        self.console_output.append("   ✓ Scenario Analysis (Conservative, Base, Optimistic, Pessimistic)")
+        self.console_output.append("   ✓ Comprehensive valuation report")
+        self.console_output.append("")
+        self.console_output.append(">> The shares and debt analysis you requested is now complete!")
         
-        self.console_output.append(f"\n>> Starting complete analysis for {self.current_ticker}...")
-        self.console_output.append("This will run the full analysis pipeline:")
-        self.console_output.append("  1. Download financial data")
-        self.console_output.append("  2. Calculate owner earnings")  
-        self.console_output.append("  3. Create visualizations")
-        self.console_output.append("🌐 Opening browser for download...")
-        self.console_output.append("📥 Will monitor Downloads folder for new XLSX files...")
-        self.console_output.append("⏱️ Timeout: 5 minutes (plenty of time for manual download)")
-        self.console_output.append("Please wait...\n")
+        self.hide_progress()
+        self.enable_buttons()
         
-        self.disable_buttons()
-        self.show_progress()
+        # Clean up temp variable
+        if hasattr(self, 'temp_growth_rate'):
+            delattr(self, 'temp_growth_rate')
+    
+    def on_complete_analysis_finished(self):
+        """Handle completion of complete analysis workflow."""
+        self.console_output.append("\nSUCCESS: COMPLETE ANALYSIS FINISHED!")
+        self.console_output.append("Check these directories for results:")
+        self.console_output.append("  >> data/ - CSV files with financial analysis")
+        self.console_output.append("  >> charts/ - PNG charts and visualizations") 
+        self.console_output.append("  >> downloaded_files/ - Raw Excel data")
+        self.console_output.append("")
+        self.console_output.append(">> All analysis steps completed successfully!")
+        self.console_output.append(">> Owner earnings, fair value, and visualizations are ready")
+        self.console_output.append(">> You can view charts or run individual analysis steps")
         
-        # Use the new MarketSwimmer CLI automation with proper timeout
-        command = f'python -m marketswimmer analyze {self.current_ticker}'
-        logger.info(f"Full analysis command: {command}")
+        self.hide_progress()
+        self.enable_buttons()
         
-        self.worker_thread = WorkerThread(command, timeout=300)
-        self.worker_thread.output_signal.connect(self.update_console)
-        self.worker_thread.finished_signal.connect(self.on_process_finished)
-        self.worker_thread.error_signal.connect(self.on_process_error)
-        self.worker_thread.start()
+        # Clean up temp variable
+        if hasattr(self, 'temp_growth_rate'):
+            delattr(self, 'temp_growth_rate')
+    
+    def on_complete_analysis_error(self, error_message):
+        """Handle errors in complete analysis workflow."""
+        self.console_output.append(f"\n>> ERROR in complete analysis: {error_message}")
+        self.console_output.append(">> Phase 1 completed but fair value calculation failed")
+        self.console_output.append(">> You can try running fair value calculation manually")
+        
+        self.hide_progress()
+        self.enable_buttons()
+        
+        # Clean up temp variable
+        if hasattr(self, 'temp_growth_rate'):
+            delattr(self, 'temp_growth_rate')
 
     def run_command(self, command):
         """Run a command in a separate thread"""
@@ -565,19 +706,39 @@ class MarketSwimmerGUI(QMainWindow):
         
         logger.info("Data processing completed successfully")
 
+    def on_fair_value_finished(self):
+        """Handle fair value calculation completion"""
+        log_function_exit("WorkerThread.run()")
+        
+        self.console_output.append("\n>> Fair value calculation completed successfully!")
+        self.console_output.append(">> Fair value analysis report has been generated")
+        self.console_output.append(">> Check the data/ folder for the detailed report")
+        self.hide_progress()
+        self.enable_buttons()
+        self.statusBar().showMessage(f"Fair value calculated for {self.current_ticker}")
+        
+        logger.info("Fair value calculation completed successfully")
+
+    def on_fair_value_error(self, error_msg):
+        """Handle fair value calculation error/timeout"""
+        log_function_exit("WorkerThread.run() - ERROR")
+        
+        self.console_output.append(f"\n>> ERROR in fair value calculation: {error_msg}")
+        self.console_output.append(">> Please check that owner earnings data exists")
+        self.console_output.append(">> Try calculating owner earnings first")
+        self.hide_progress()
+        self.enable_buttons()
+        self.statusBar().showMessage("Fair value calculation failed")
+        
+        logger.error(f"Fair value calculation failed: {error_msg}")
+
     def disable_buttons(self):
-        """Disable all analysis buttons during processing"""
-        self.download_button.setEnabled(False)
-        self.earnings_button.setEnabled(False)
-        self.visualize_button.setEnabled(False)
+        """Disable analysis button during processing"""
         self.complete_button.setEnabled(False)
 
     def enable_buttons(self):
-        """Enable all analysis buttons after processing"""
+        """Enable analysis button after processing"""
         if self.current_ticker:
-            self.download_button.setEnabled(True)
-            self.earnings_button.setEnabled(True)
-            self.visualize_button.setEnabled(True)
             self.complete_button.setEnabled(True)
 
     def show_progress(self):

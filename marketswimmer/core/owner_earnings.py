@@ -37,7 +37,27 @@ class OwnerEarningsCalculator:
             xlsx_file_path (str): Path to the XLSX file with financial data
         """
         self.file_path = xlsx_file_path
-        self.company_name = os.path.basename(xlsx_file_path).split('_')[0] if '_' in os.path.basename(xlsx_file_path) else "Unknown"
+        file_basename = os.path.basename(xlsx_file_path)
+        
+        # Extract company name and ticker from filename
+        if '_' in file_basename:
+            parts = file_basename.split('_')
+            self.company_name = parts[0] if parts else "Unknown"
+            # Look for ticker in filename (usually after 'export' and before date)
+            for part in parts:
+                if 'export' in part.lower():
+                    idx = parts.index(part)
+                    if idx + 1 < len(parts):
+                        self.ticker = parts[idx + 1].upper()
+                        break
+            else:
+                # Fallback: use first part as ticker
+                self.ticker = parts[0].upper() if parts else "UNKNOWN"
+        else:
+            self.company_name = file_basename.split('.')[0]
+            self.ticker = self.company_name.upper()
+            
+        print(f"[COMPANY] Detected: {self.company_name}, Ticker: {getattr(self, 'ticker', 'UNKNOWN')}")
         return self.load_financial_statements()
         
     def load_financial_statements(self):
@@ -552,6 +572,206 @@ class OwnerEarningsCalculator:
         
         return working_capital_changes
 
+    def _detect_insurance_company(self):
+        """
+        Detect if this appears to be an insurance company based on financial patterns.
+
+        Returns:
+            bool: True if appears to be insurance company
+        """
+        # Check for typical insurance company indicators
+        indicators = 0
+
+        # 1. Company name contains insurance-related terms
+        if self.company_name:
+            insurance_terms = ['insurance', 'life', 'health', 'casualty', 'assurance', 'reinsurance', 'lnc']
+            company_lower = self.company_name.lower()
+            for term in insurance_terms:
+                if term in company_lower:
+                    indicators += 1
+                    print(f"   [DETECT] Found insurance term '{term}' in company name")
+                    break
+
+        # 2. Ticker symbol indicates insurance (LNC, AIG, MET, etc.)
+        if hasattr(self, 'ticker') and self.ticker:
+            insurance_tickers = ['lnc', 'aig', 'met', 'pru', 'afl', 'unh', 'hum', 'ci']
+            if self.ticker.lower() in insurance_tickers:
+                indicators += 1
+                print(f"   [DETECT] Insurance ticker detected: {self.ticker}")
+
+        # 3. Very large working capital changes relative to net income (typical of insurance reserves)
+        if hasattr(self, 'owner_earnings_data') and self.owner_earnings_data:
+            wc_changes = self.owner_earnings_data.get('working_capital_change', {})
+            net_incomes = self.owner_earnings_data.get('net_income', {})
+            
+            if wc_changes and net_incomes:
+                large_wc_count = 0
+                total_years = len(wc_changes)
+                
+                for year in wc_changes:
+                    wc_change = abs(wc_changes.get(year, 0))
+                    net_income = abs(net_incomes.get(year, 1))  # Avoid division by zero
+                    
+                    if net_income > 0 and wc_change > 2 * net_income:  # WC change > 2x net income
+                        large_wc_count += 1
+                
+                if total_years > 0 and large_wc_count / total_years > 0.3:  # 30% of years
+                    indicators += 1
+                    print(f"   [DETECT] Large working capital pattern detected ({large_wc_count}/{total_years} years)")
+
+        return indicators >= 2  # Need 2+ indicators to classify as insurance company
+
+    def _detect_bank(self):
+        """
+        Detect if this appears to be a bank based on financial patterns and identifiers.
+
+        Returns:
+            bool: True if appears to be a bank
+        """
+        # Check for typical bank indicators
+        indicators = 0
+
+        # 1. Company name contains banking-related terms
+        if self.company_name:
+            banking_terms = ['bank', 'bancorp', 'financial', 'credit union', 'savings', 'trust', 'bancshares']
+            company_lower = self.company_name.lower()
+            for term in banking_terms:
+                if term in company_lower:
+                    indicators += 1
+                    print(f"   [DETECT] Found banking term '{term}' in company name")
+                    break
+
+        # 2. Ticker symbol indicates banking (common bank tickers)
+        if hasattr(self, 'ticker') and self.ticker:
+            bank_tickers = ['jpm', 'bac', 'wfc', 'c', 'gs', 'ms', 'usb', 'pnc', 'td', 'bk', 'tfc', 'cof', 'schw', 'zion', 'rf', 'hban', 'fitb', 'mtb', 'stl', 'cma']
+            if self.ticker.lower() in bank_tickers:
+                indicators += 1
+                print(f"   [DETECT] Banking ticker detected: {self.ticker}")
+
+        # 3. Massive working capital changes (typical of banks due to deposits/loans)
+        if hasattr(self, 'owner_earnings_data') and self.owner_earnings_data:
+            wc_changes = self.owner_earnings_data.get('working_capital_change', {})
+            net_incomes = self.owner_earnings_data.get('net_income', {})
+            
+            if wc_changes and net_incomes:
+                large_wc_count = 0
+                total_years = len(wc_changes)
+                
+                for year in wc_changes:
+                    wc_change = abs(wc_changes.get(year, 0))
+                    net_income = abs(net_incomes.get(year, 1))  # Avoid division by zero
+                    
+                    # Banks often have WC changes 5-10x larger than net income
+                    if net_income > 0 and wc_change > 5 * net_income:
+                        large_wc_count += 1
+                
+                if total_years > 0 and large_wc_count / total_years > 0.5:  # 50% of years
+                    indicators += 1
+                    print(f"   [DETECT] Banking working capital pattern detected ({large_wc_count}/{total_years} years)")
+
+        # 4. Very low CapEx relative to income (banks don't need much physical capital)
+        if hasattr(self, 'owner_earnings_data') and self.owner_earnings_data:
+            capex_data = self.owner_earnings_data.get('capex', {})
+            net_incomes = self.owner_earnings_data.get('net_income', {})
+            
+            if capex_data and net_incomes:
+                low_capex_count = 0
+                total_years = len(capex_data)
+                
+                for year in capex_data:
+                    capex = abs(capex_data.get(year, 0))
+                    net_income = abs(net_incomes.get(year, 1))
+                    
+                    # Banks typically have CapEx < 20% of net income
+                    if net_income > 0 and capex < 0.2 * net_income:
+                        low_capex_count += 1
+                
+                if total_years > 0 and low_capex_count / total_years > 0.6:  # 60% of years
+                    indicators += 1
+                    print(f"   [DETECT] Banking low-CapEx pattern detected ({low_capex_count}/{total_years} years)")
+
+        return indicators >= 2  # Need 2+ indicators to classify as bank
+        """
+        Detect if this appears to be an insurance company based on financial patterns.
+        
+        Returns:
+            bool: True if appears to be insurance company
+        """
+        # Check for typical insurance company indicators
+        indicators = 0
+        
+        # 1. Company name contains insurance-related terms
+        if self.company_name:
+            insurance_terms = ['insurance', 'life', 'health', 'casualty', 'assurance', 'reinsurance', 'lnc']
+            company_lower = self.company_name.lower()
+            for term in insurance_terms:
+                if term in company_lower:
+                    indicators += 1
+                    print(f"   [DETECT] Found insurance term '{term}' in company name")
+                    break
+        
+        # 2. Ticker symbol indicates insurance (LNC, AIG, MET, etc.)
+        if hasattr(self, 'ticker') and self.ticker:
+            insurance_tickers = ['lnc', 'aig', 'met', 'pru', 'afl', 'unh', 'hum', 'ci']
+            if self.ticker.lower() in insurance_tickers:
+                indicators += 1
+                print(f"   [DETECT] Insurance ticker detected: {self.ticker}")
+        
+        # 3. Very large working capital changes relative to net income (typical of insurance reserves)
+        if hasattr(self, 'owner_earnings_data') and self.owner_earnings_data:
+            wc_changes = self.owner_earnings_data.get('working_capital_change', {})
+            net_incomes = self.owner_earnings_data.get('net_income', {})
+            
+            if wc_changes and net_incomes:
+                # Check if working capital changes are often larger than net income
+                large_wc_count = 0
+                total_comparisons = 0
+                
+                for year in wc_changes:
+                    if year in net_incomes:
+                        wc = abs(wc_changes[year])
+                        ni = abs(net_incomes[year])
+                        if ni > 0 and wc > ni * 2:  # WC change > 2x net income
+                            large_wc_count += 1
+                        total_comparisons += 1
+                
+                if total_comparisons > 0 and large_wc_count / total_comparisons > 0.5:
+                    indicators += 1
+                    print(f"   [DETECT] Large working capital pattern detected ({large_wc_count}/{total_comparisons} years)")
+        
+        # 4. Minimal capital expenditures (insurance companies don't need much CapEx)
+        if hasattr(self, 'owner_earnings_data') and self.owner_earnings_data:
+            capex_data = self.owner_earnings_data.get('capex', {})
+            net_incomes = self.owner_earnings_data.get('net_income', {})
+            
+            if capex_data and net_incomes:
+                low_capex_count = 0
+                total_comparisons = 0
+                
+                for year in capex_data:
+                    if year in net_incomes:
+                        capex = abs(capex_data[year])
+                        ni = abs(net_incomes[year])
+                        if ni > 0 and capex < ni * 0.1:  # CapEx < 10% of net income
+                            low_capex_count += 1
+                        total_comparisons += 1
+                
+                if total_comparisons > 0 and low_capex_count / total_comparisons > 0.7:
+                    indicators += 1
+                    print(f"   [DETECT] Low capital expenditure pattern detected")
+        
+        # If 2 or more indicators, likely an insurance company
+        is_insurance = indicators >= 2
+        
+        if is_insurance:
+            print(f"   [DETECT] Insurance company detected ({indicators} indicators)")
+            print(f"   [INSURANCE] For insurance companies, working capital changes reflect policy reserves and float")
+            print(f"   [INSURANCE] Using Owner Earnings ≈ Net Income + Depreciation for valuation")
+        else:
+            print(f"   [DETECT] Traditional company detected ({indicators} indicators)")
+        
+        return is_insurance
+
     def calculate_owner_earnings(self):
         """Calculate owner earnings for each available year."""
         if not self.owner_earnings_data:
@@ -574,10 +794,27 @@ class OwnerEarningsCalculator:
                 capex = self.owner_earnings_data.get('capex', {}).get(year, 0)
                 wc_change = self.owner_earnings_data.get('working_capital_change', {}).get(year, 0)
                 
-                # Calculate owner earnings
-                # Note: CapEx is usually negative in cash flow, so we add it (which subtracts it from earnings)
-                # Working capital increase is negative for cash flow, so we add it
-                owner_earnings_value = net_income + depreciation + capex + wc_change
+                # Calculate owner earnings with industry-specific adjustments
+                # Check if this appears to be an insurance company or bank based on working capital patterns
+                is_insurance_company = self._detect_insurance_company()
+                is_bank = self._detect_bank()
+                
+                if is_insurance_company:
+                    # For insurance companies, use simplified approach:
+                    # Owner Earnings ≈ Net Income + Depreciation - CapEx (ignore working capital changes)
+                    # Working capital changes for insurers reflect policy reserves and float, not operational cash flow
+                    owner_earnings_value = net_income + depreciation - abs(capex)
+                    print(f"   [INSURANCE] Using insurance company methodology (excluding working capital changes)")
+                elif is_bank:
+                    # For banks, use banking-specific approach:
+                    # Owner Earnings ≈ Net Income + Depreciation - CapEx (ignore working capital changes)
+                    # Working capital changes for banks reflect deposits/loans which are core business, not working capital
+                    owner_earnings_value = net_income + depreciation - abs(capex)
+                    print(f"   [BANK] Using banking methodology (excluding working capital changes)")
+                else:
+                    # Traditional formula: Net Income + Depreciation - CapEx - Working Capital Increases
+                    # Fixed: Working capital changes should be subtracted when they increase (reduce cash flow)
+                    owner_earnings_value = net_income + depreciation - abs(capex) - wc_change
                 
                 owner_earnings[year] = {
                     'net_income': net_income,
@@ -724,8 +961,8 @@ def find_ticker_xlsx_file(ticker, directory="./downloaded_files"):
     if not os.path.exists(directory):
         return None
     
-    # Clean ticker (remove dots, make lowercase)
-    clean_ticker = ticker.replace('.', '').lower()
+    # Clean ticker (replace dots with underscores, make lowercase)
+    clean_ticker = ticker.replace('.', '_').lower()
     
     # Look for files matching the ticker pattern
     pattern = os.path.join(directory, f"*{clean_ticker}*.xlsx")
