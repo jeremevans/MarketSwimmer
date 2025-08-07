@@ -42,17 +42,23 @@ class OwnerEarningsCalculator:
         # Extract company name and ticker from filename
         if '_' in file_basename:
             parts = file_basename.split('_')
-            self.company_name = parts[0] if parts else "Unknown"
-            # Look for ticker in filename (usually after 'export' and before date)
-            for part in parts:
-                if 'export' in part.lower():
-                    idx = parts.index(part)
-                    if idx + 1 < len(parts):
-                        self.ticker = parts[idx + 1].upper()
-                        break
+            # For standard format "financials_export_TICKER_date", ticker is at index 2
+            if len(parts) >= 3 and parts[0] == "financials" and parts[1] == "export":
+                self.ticker = parts[2].upper()
+                self.company_name = self.ticker  # Use ticker as company name
             else:
-                # Fallback: use first part as ticker
-                self.ticker = parts[0].upper() if parts else "UNKNOWN"
+                # Look for ticker in filename (usually after 'export' and before date)
+                for part in parts:
+                    if 'export' in part.lower():
+                        idx = parts.index(part)
+                        if idx + 1 < len(parts):
+                            self.ticker = parts[idx + 1].upper()
+                            self.company_name = self.ticker
+                            break
+                else:
+                    # Fallback: use first part as ticker
+                    self.ticker = parts[0].upper() if parts else "UNKNOWN"
+                    self.company_name = self.ticker
         else:
             self.company_name = file_basename.split('.')[0]
             self.ticker = self.company_name.upper()
@@ -399,6 +405,13 @@ class OwnerEarningsCalculator:
         ]
         net_income = self._find_financial_item(self.income_statement, net_income_terms, periods_to_extract)
         
+        # Operating Cash Flow (from Cash Flow Statement) - NEW for alternative methods
+        operating_cash_flow_terms = [
+            'cash flow from operating activities', 'operating cash flow', 'net cash from operations',
+            'cash flow from operations', 'operating activities', 'cash from operations'
+        ]
+        operating_cash_flow = self._find_financial_item(self.cash_flow, operating_cash_flow_terms, periods_to_extract)
+        
         # Depreciation & Amortization (from Cash Flow Statement or Income Statement)
         depreciation_terms = [
             'depreciation', 'amortization', 'depreciation and amortization',
@@ -487,6 +500,7 @@ class OwnerEarningsCalculator:
         # Store the components
         self.owner_earnings_data = {
             'net_income': net_income,
+            'operating_cash_flow': operating_cash_flow,  # NEW: For alternative methods
             'depreciation': depreciation,
             'capex': capex,
             'working_capital_change': working_capital_change
@@ -830,6 +844,203 @@ class OwnerEarningsCalculator:
         
         return owner_earnings
     
+    def calculate_alternative_owner_earnings_methods(self):
+        """
+        Calculate Owner Earnings using multiple methodologies for comparison.
+        
+        Returns a dictionary with different calculation methods:
+        1. Traditional Method: Net Income + Depreciation - CapEx - Working Capital Changes
+        2. Operating Cash Flow Method: Operating Cash Flow - CapEx
+        3. Free Cash Flow Method: Operating Cash Flow - CapEx (simplified)
+        
+        This provides multiple perspectives on the true cash generation of the business.
+        """
+        if not self.owner_earnings_data:
+            self.extract_owner_earnings_components()
+        
+        print(f"\n[ALTERNATIVE] Calculating Alternative Owner Earnings Methods for {self.company_name}...")
+        print(f"[INFO] These methods provide different perspectives on cash generation")
+        
+        # Get all available years
+        all_years = set()
+        for component in self.owner_earnings_data.values():
+            if component:  # Check if component exists
+                all_years.update(component.keys())
+        
+        alternative_methods = {}
+        
+        for year in sorted(all_years, reverse=True):
+            try:
+                # Get components for this year
+                net_income = self.owner_earnings_data.get('net_income', {}).get(year, 0)
+                operating_cash_flow = self.owner_earnings_data.get('operating_cash_flow', {}).get(year, 0)
+                depreciation = self.owner_earnings_data.get('depreciation', {}).get(year, 0)
+                capex = self.owner_earnings_data.get('capex', {}).get(year, 0)
+                wc_change = self.owner_earnings_data.get('working_capital_change', {}).get(year, 0)
+                
+                # Check if this appears to be an insurance company or bank
+                is_insurance_company = self._detect_insurance_company()
+                is_bank = self._detect_bank()
+                
+                year_methods = {}
+                
+                # Method 1: Traditional Buffett Formula
+                if is_insurance_company:
+                    traditional_oe = net_income + depreciation - abs(capex)
+                    method_note = "Insurance methodology (excludes working capital)"
+                elif is_bank:
+                    traditional_oe = net_income + depreciation - abs(capex)
+                    method_note = "Banking methodology (excludes working capital)"
+                else:
+                    traditional_oe = net_income + depreciation - abs(capex) - wc_change
+                    method_note = "Standard methodology"
+                
+                year_methods['traditional'] = {
+                    'value': traditional_oe,
+                    'method': 'Net Income + Depreciation - CapEx - Working Capital Changes',
+                    'note': method_note,
+                    'components': {
+                        'net_income': net_income,
+                        'depreciation': depreciation,
+                        'capex': capex,
+                        'working_capital_change': wc_change
+                    }
+                }
+                
+                # Method 2: Operating Cash Flow Method (Buffett's alternative approach)
+                if operating_cash_flow != 0:
+                    ocf_oe = operating_cash_flow - abs(capex)
+                    year_methods['operating_cash_flow'] = {
+                        'value': ocf_oe,
+                        'method': 'Operating Cash Flow - CapEx',
+                        'note': 'Uses actual cash flow from operations',
+                        'components': {
+                            'operating_cash_flow': operating_cash_flow,
+                            'capex': capex
+                        }
+                    }
+                
+                # Method 3: Free Cash Flow Method (commonly used alternative)
+                if operating_cash_flow != 0:
+                    fcf_oe = operating_cash_flow - abs(capex)  # Same as OCF method for simplicity
+                    year_methods['free_cash_flow'] = {
+                        'value': fcf_oe,
+                        'method': 'Free Cash Flow (Operating Cash Flow - CapEx)',
+                        'note': 'Standard free cash flow definition',
+                        'components': {
+                            'operating_cash_flow': operating_cash_flow,
+                            'capex': capex
+                        }
+                    }
+                
+                alternative_methods[year] = year_methods
+                
+            except Exception as e:
+                print(f"[WARNING] Error calculating alternative methods for {year}: {e}")
+                continue
+        
+        return alternative_methods
+    
+    def print_alternative_methods_analysis(self):
+        """Print a comprehensive comparison of alternative Owner Earnings methods."""
+        alternative_methods = self.calculate_alternative_owner_earnings_methods()
+        
+        if not alternative_methods:
+            print("[ERROR] No alternative methods data could be calculated.")
+            return
+        
+        print(f"\n" + "=" * 80)
+        print(f"[ALTERNATIVE] OWNER EARNINGS METHODS COMPARISON - {self.company_name.upper()}")
+        print("=" * 80)
+        
+        print(f"\n[METHODOLOGY] Three Approaches to Owner Earnings:")
+        print(f"1. TRADITIONAL: Net Income + Depreciation - CapEx - Working Capital Changes")
+        print(f"2. OPERATING CASH FLOW: Operating Cash Flow - CapEx")
+        print(f"3. FREE CASH FLOW: Operating Cash Flow - CapEx (alternative perspective)")
+        print(f"\nWarren Buffett has discussed both approaches depending on the business type.")
+        
+        # Show detailed comparison by year
+        print(f"\n[COMPARISON] YEAR-BY-YEAR BREAKDOWN:")
+        print("-" * 80)
+        
+        for year in sorted(alternative_methods.keys(), reverse=True):
+            year_data = alternative_methods[year]
+            print(f"\n[YEAR] {year}:")
+            
+            for method_name, method_data in year_data.items():
+                value = method_data['value']
+                method_desc = method_data['method']
+                note = method_data.get('note', '')
+                
+                print(f"   {method_name.upper():20s}: ${value:>15,.0f}  ({method_desc})")
+                if note:
+                    print(f"   {' '*20}   Note: {note}")
+        
+        # Calculate averages for each method
+        print(f"\n[AVERAGES] 10-YEAR AVERAGE COMPARISON:")
+        print("-" * 80)
+        
+        method_averages = {}
+        for method_name in ['traditional', 'operating_cash_flow', 'free_cash_flow']:
+            values = []
+            for year_data in alternative_methods.values():
+                if method_name in year_data:
+                    values.append(year_data[method_name]['value'])
+            
+            if values:
+                avg_value = sum(values) / len(values)
+                method_averages[method_name] = avg_value
+                
+                # Get method description from first occurrence
+                method_desc = next(
+                    (data[method_name]['method'] for data in alternative_methods.values() 
+                     if method_name in data), method_name
+                )
+                
+                print(f"{method_name.upper():20s}: ${avg_value:>15,.0f}  (Average of {len(values)} years)")
+        
+        # Show differences between methods
+        if len(method_averages) > 1:
+            print(f"\n[ANALYSIS] DIFFERENCES BETWEEN METHODS:")
+            print("-" * 80)
+            
+            traditional_avg = method_averages.get('traditional', 0)
+            ocf_avg = method_averages.get('operating_cash_flow', 0)
+            fcf_avg = method_averages.get('free_cash_flow', 0)
+            
+            if traditional_avg != 0 and ocf_avg != 0:
+                diff_pct = ((ocf_avg - traditional_avg) / abs(traditional_avg)) * 100
+                print(f"Operating Cash Flow vs Traditional: {diff_pct:+.1f}% difference")
+                print(f"   If positive: OCF method shows higher cash generation")
+                print(f"   If negative: Traditional method shows higher cash generation")
+                
+                if abs(diff_pct) > 20:
+                    print(f"   [WARNING] Large difference suggests reviewing working capital assumptions")
+                elif abs(diff_pct) < 5:
+                    print(f"   [OK] Methods are very consistent")
+        
+        # Recommendations
+        print(f"\n[RECOMMENDATIONS] WHICH METHOD TO USE:")
+        print("-" * 80)
+        
+        is_insurance = self._detect_insurance_company()
+        is_bank = self._detect_bank()
+        
+        if is_insurance:
+            print(f"   For insurance companies: Use TRADITIONAL method (working capital excluded)")
+            print(f"   Reason: Working capital changes reflect insurance float, not operations")
+        elif is_bank:
+            print(f"   For banks: Use TRADITIONAL method (working capital excluded)")
+            print(f"   Reason: Working capital changes reflect deposits/loans, not operations")
+        else:
+            print(f"   For traditional businesses: Compare TRADITIONAL vs OPERATING CASH FLOW")
+            print(f"   - If similar: Either method works well")
+            print(f"   - If different: OCF method may be more accurate for cash generation")
+            print(f"   - Traditional method: Better for businesses with predictable working capital")
+            print(f"   - OCF method: Better for businesses with volatile working capital")
+        
+        return alternative_methods
+
     def calculate_annual_owner_earnings(self):
         """Calculate owner earnings using annual financial data."""
         # Set preference for annual data processing

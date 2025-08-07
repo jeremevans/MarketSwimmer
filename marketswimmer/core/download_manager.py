@@ -104,12 +104,11 @@ class DownloadManager:
         filename = file_path.name.lower()
         ticker_lower = ticker.lower().replace('.', '')
         
-        # Common patterns for financial data files
+        # Ticker-specific patterns only - no generic matches to prevent cross-contamination
         patterns = [
             f"financials_export_{ticker_lower}",
             f"financial_{ticker_lower}",
             f"{ticker_lower}_financials",
-            "financials_export",  # Generic financial export
         ]
         
         return any(pattern in filename for pattern in patterns)

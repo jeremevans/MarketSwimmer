@@ -322,7 +322,31 @@ class MarketSwimmerGUI(QMainWindow):
                 color: #ffffff;
             }
         """)
-        analysis_layout.addWidget(self.open_charts_button, 2, 0, 1, 2)  # Span 2 columns
+        analysis_layout.addWidget(self.open_charts_button, 2, 0, 1, 1)  # Left column
+        
+        # Add Cleanup button
+        self.cleanup_button = QPushButton("🧹 Cleanup Analysis")
+        self.cleanup_button.clicked.connect(self.run_cleanup)
+        self.cleanup_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ffffff;
+                border: 2px solid #f39c12;
+                color: #f39c12;
+                font-size: 14px;
+                padding: 12px 20px;
+                font-weight: 500;
+            }
+            QPushButton:hover {
+                background-color: #f39c12;
+                color: #ffffff;
+            }
+            QPushButton:pressed {
+                background-color: #e67e22;
+                border-color: #e67e22;
+                color: #ffffff;
+            }
+        """)
+        analysis_layout.addWidget(self.cleanup_button, 2, 1, 1, 1)  # Right column
         
         main_layout.addWidget(analysis_group)
         
@@ -775,6 +799,68 @@ class MarketSwimmerGUI(QMainWindow):
             error_msg = f"Could not open charts folder: {str(e)}"
             self.console_output.append(f"ERROR: {error_msg}")
             logger.error(error_msg)
+
+    def run_cleanup(self):
+        """Run the cleanup script to remove analysis artifacts"""
+        log_gui_event("BUTTON_CLICK", "Cleanup Analysis button clicked")
+        
+        # Ask for confirmation
+        reply = QMessageBox.question(self, "Confirm Cleanup", 
+                                   "This will remove all analysis artifacts:\n\n"
+                                   "• analysis_output/ folder (charts and reports)\n"
+                                   "• charts/ folder (visualizations)\n"
+                                   "• data/ folder (CSV files)\n"
+                                   "• downloaded_files/ folder (Excel files)\n"
+                                   "• All .txt report files\n\n"
+                                   "Are you sure you want to proceed?",
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                                   QMessageBox.StandardButton.No)
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            self.console_output.append("\n🧹 Starting cleanup process...")
+            self.console_output.append(">> Removing analysis artifacts...")
+            
+            try:
+                # Use the Python cleanup script
+                import shutil
+                from pathlib import Path
+                
+                # Folders to remove
+                folders_to_remove = ["analysis_output", "charts", "data", "downloaded_files"]
+                
+                for folder in folders_to_remove:
+                    folder_path = Path(folder)
+                    if folder_path.exists():
+                        shutil.rmtree(folder_path)
+                        self.console_output.append(f"   ✓ Removed {folder}/ folder")
+                    else:
+                        self.console_output.append(f"   - {folder}/ folder not found")
+                
+                # Remove .txt files (reports)
+                txt_files = list(Path(".").glob("*.txt"))
+                for txt_file in txt_files:
+                    # Skip common files that shouldn't be deleted
+                    if txt_file.name.lower() not in ["readme.txt", "license.txt", "requirements.txt"]:
+                        txt_file.unlink()
+                        self.console_output.append(f"   ✓ Removed {txt_file.name}")
+                
+                if not txt_files:
+                    self.console_output.append("   - No .txt report files found")
+                
+                self.console_output.append("\n✅ Cleanup completed successfully!")
+                self.console_output.append(">> All analysis artifacts have been removed")
+                self.console_output.append(">> You can now run a fresh analysis")
+                
+                logger.info("Cleanup completed successfully")
+                
+            except Exception as e:
+                error_msg = f"Cleanup failed: {str(e)}"
+                self.console_output.append(f"\n❌ ERROR: {error_msg}")
+                QMessageBox.critical(self, "Cleanup Error", f"Failed to cleanup files:\n{error_msg}")
+                logger.error(error_msg)
+        else:
+            self.console_output.append(">> Cleanup cancelled by user")
+            logger.info("Cleanup cancelled by user")
 
 def main():
     log_function_entry("main()")

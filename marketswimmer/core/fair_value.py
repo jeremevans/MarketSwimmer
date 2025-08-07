@@ -458,6 +458,7 @@ class FairValueCalculator:
         Perform enhanced fair value analysis with detailed balance sheet breakdown.
         
         This is the main entry point for comprehensive fair value analysis that includes:
+        - Multiple Owner Earnings calculation methods
         - Automatic detection of preferred shares
         - Detailed balance sheet components
         - Insurance company methodology
@@ -473,11 +474,82 @@ class FairValueCalculator:
         """
         print(f"\n[INFO] Starting enhanced fair value analysis for {ticker.upper()}")
         
+        # Load owner earnings data and calculate alternatives
+        annual_data = self.load_owner_earnings_data(ticker, 'annual')
+        if annual_data.empty:
+            raise ValueError(f"No annual owner earnings data found for {ticker}")
+        
+        # Calculate traditional 10-year average
+        years_to_use = min(10, len(annual_data))
+        recent_data = annual_data.head(years_to_use)
+        traditional_avg = recent_data['Owner Earnings'].mean()
+        
+        # Try to get alternative methods if available
+        alternative_methods = None
+        try:
+            # Load the calculator to get alternative methods
+            from .owner_earnings import OwnerEarningsCalculator
+            latest_file = self._find_latest_ticker_file(ticker)
+            if latest_file:
+                calc = OwnerEarningsCalculator(latest_file)
+                calc.preferred_data_type = 'Annual'
+                calc.load_financial_statements_by_type('Annual')
+                alternative_methods = calc.calculate_alternative_owner_earnings_methods()
+        except Exception as e:
+            print(f"[INFO] Alternative methods not available: {e}")
+        
+        # Display alternative methods if available
+        if alternative_methods:
+            print(f"\n[METHODS] ALTERNATIVE OWNER EARNINGS APPROACHES:")
+            print("=" * 60)
+            
+            # Calculate averages for each method
+            method_averages = {}
+            for method_name in ['traditional', 'operating_cash_flow', 'free_cash_flow']:
+                values = []
+                for year_data in alternative_methods.values():
+                    if method_name in year_data:
+                        values.append(year_data[method_name]['value'])
+                
+                if values:
+                    avg_value = sum(values) / len(values)
+                    method_averages[method_name] = avg_value
+            
+            # Show each method
+            for method_name, avg_value in method_averages.items():
+                method_display = method_name.replace('_', ' ').title()
+                print(f"{method_display:25s}: ${avg_value:>15,.0f} (10-year average)")
+            
+            # Show differences
+            if 'traditional' in method_averages and 'operating_cash_flow' in method_averages:
+                trad_avg = method_averages['traditional']
+                ocf_avg = method_averages['operating_cash_flow']
+                if trad_avg != 0:
+                    diff_pct = ((ocf_avg - trad_avg) / abs(trad_avg)) * 100
+                    print(f"\nOperating Cash Flow vs Traditional: {diff_pct:+.1f}% difference")
+        
         # Extract all balance sheet data with preferred stock detection
         balance_data = self.extract_balance_sheet_data(ticker)
         
-        # Calculate fair value with preferred stock consideration
+        # Calculate fair value using traditional method (primary)
         valuation_results = self.calculate_fair_value_from_ticker(ticker, preferred_stock=balance_data.get('preferred_stock', 0))
+        
+        # If alternative methods available, calculate fair value using OCF method too
+        alternative_valuations = {}
+        if alternative_methods and 'operating_cash_flow' in method_averages:
+            print(f"\n[ALTERNATIVE] Fair Value Using Operating Cash Flow Method:")
+            print("-" * 50)
+            
+            ocf_results = self.calculate_fair_value(
+                average_owner_earnings=method_averages['operating_cash_flow'],
+                cash_and_investments=balance_data.get('cash_and_equivalents', 0) + balance_data.get('short_term_investments', 0),
+                total_debt=balance_data.get('total_debt', 0),
+                preferred_stock=balance_data.get('preferred_stock', 0),
+                shares_outstanding=balance_data.get('shares_outstanding') if balance_data.get('shares_outstanding', 0) > 0 else None
+            )
+            
+            alternative_valuations['operating_cash_flow'] = ocf_results
+            print(f"OCF-Based Fair Value per Share: ${ocf_results.get('fair_value_per_share', 0):,.2f}")
         
         # Create enhanced scenario analysis
         scenario_df = self.create_scenario_analysis(
@@ -523,16 +595,37 @@ class FairValueCalculator:
         if save_detailed_report:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             report_file = f"{ticker.upper()}_enhanced_fair_value_{timestamp}.txt"
-            self.save_valuation_report(valuation_results, scenario_df, report_file, ticker, balance_data)
+            self.save_valuation_report(valuation_results, scenario_df, report_file, ticker, balance_data, alternative_methods, alternative_valuations)
         
         # Return comprehensive results
         return {
             'ticker': ticker.upper(),
             'balance_sheet_data': balance_data,
             'valuation_results': valuation_results,
+            'alternative_methods': alternative_methods,
+            'alternative_valuations': alternative_valuations,
             'scenario_analysis': scenario_df,
-            'methodology': 'Enhanced fair value with preferred stock detection'
+            'methodology': 'Enhanced fair value with multiple Owner Earnings methods'
         }
+    
+    def _find_latest_ticker_file(self, ticker: str) -> Optional[str]:
+        """Find the latest downloaded file for a ticker."""
+        try:
+            from pathlib import Path
+            downloaded_files = Path("downloaded_files")
+            if not downloaded_files.exists():
+                return None
+            
+            normalized_ticker = ticker.lower().replace('.', '_')
+            ticker_files = list(downloaded_files.glob(f"*{normalized_ticker}*.xlsx"))
+            if not ticker_files:
+                return None
+            
+            # Return most recent file
+            latest_file = sorted(ticker_files, key=lambda x: x.stat().st_mtime)[-1]
+            return str(latest_file)
+        except Exception:
+            return None
     
     def calculate_fair_value_from_ticker(self, ticker: str, preferred_stock: float = 0) -> Dict:
         """
@@ -837,7 +930,9 @@ class FairValueCalculator:
                             scenario_df: pd.DataFrame,
                             output_file: str,
                             ticker: str = "",
-                            balance_data: Dict = None):
+                            balance_data: Dict = None,
+                            alternative_methods: Dict = None,
+                            alternative_valuations: Dict = None):
         """
         Save comprehensive valuation report to file.
         
@@ -847,11 +942,79 @@ class FairValueCalculator:
             output_file: Output file path
             ticker: Stock ticker symbol
             balance_data: Balance sheet data dictionary
+            alternative_methods: Alternative Owner Earnings calculation methods
+            alternative_valuations: Valuations using alternative methods
         """
         try:
             with open(output_file, 'w') as f:
                 f.write(f"MARKETSWIMMER ENHANCED FAIR VALUE ANALYSIS - {ticker.upper()}\n")
                 f.write("=" * 50 + "\n\n")
+                
+                # Alternative Owner Earnings Methods section
+                if alternative_methods:
+                    f.write("ALTERNATIVE OWNER EARNINGS METHODS:\n")
+                    f.write("=" * 50 + "\n")
+                    
+                    # Calculate averages for each method
+                    method_averages = {}
+                    for method_name in ['traditional', 'operating_cash_flow', 'free_cash_flow']:
+                        values = []
+                        for year_data in alternative_methods.values():
+                            if method_name in year_data:
+                                values.append(year_data[method_name]['value'])
+                        
+                        if values:
+                            avg_value = sum(values) / len(values)
+                            method_averages[method_name] = avg_value
+                    
+                    f.write("\nMETHOD COMPARISON (10-Year Averages):\n")
+                    for method_name, avg_value in method_averages.items():
+                        method_display = method_name.replace('_', ' ').title()
+                        f.write(f"{method_display:25s}: ${avg_value:>15,.0f}\n")
+                    
+                    # Show methodology explanation
+                    f.write("\nMETHODOLOGY EXPLANATION:\n")
+                    f.write("1. Traditional Method: Net Income + Depreciation - CapEx - Working Capital Changes\n")
+                    f.write("   - Warren Buffett's original formula\n")
+                    f.write("   - Best for stable businesses with predictable working capital\n\n")
+                    f.write("2. Operating Cash Flow Method: Operating Cash Flow - CapEx\n")
+                    f.write("   - Alternative approach discussed by Buffett\n")
+                    f.write("   - Uses actual cash flow from operations\n")
+                    f.write("   - May be more accurate for businesses with volatile working capital\n\n")
+                    f.write("3. Free Cash Flow Method: Operating Cash Flow - CapEx\n")
+                    f.write("   - Standard financial analysis approach\n")
+                    f.write("   - Widely used by analysts and investors\n\n")
+                    
+                    # Show differences
+                    if 'traditional' in method_averages and 'operating_cash_flow' in method_averages:
+                        trad_avg = method_averages['traditional']
+                        ocf_avg = method_averages['operating_cash_flow']
+                        if trad_avg != 0:
+                            diff_pct = ((ocf_avg - trad_avg) / abs(trad_avg)) * 100
+                            f.write(f"Operating Cash Flow vs Traditional: {diff_pct:+.1f}% difference\n")
+                            if abs(diff_pct) > 20:
+                                f.write("Large difference suggests reviewing working capital treatment\n")
+                            elif abs(diff_pct) < 5:
+                                f.write("Methods are very consistent\n")
+                    
+                    f.write("\n")
+                    
+                    # Alternative valuations if available
+                    if alternative_valuations:
+                        f.write("FAIR VALUE USING ALTERNATIVE METHODS:\n")
+                        primary_fv = valuation_results.get('fair_value_per_share', 0)
+                        f.write(f"Traditional Method Fair Value: ${primary_fv:.2f} per share\n")
+                        
+                        for method_name, results in alternative_valuations.items():
+                            method_display = method_name.replace('_', ' ').title()
+                            alt_fv = results.get('fair_value_per_share', 0)
+                            f.write(f"{method_display} Fair Value: ${alt_fv:.2f} per share\n")
+                            
+                            if primary_fv > 0:
+                                diff_pct = ((alt_fv - primary_fv) / primary_fv) * 100
+                                f.write(f"   Difference from Traditional: {diff_pct:+.1f}%\n")
+                        
+                        f.write("\n")
                 
                 # Balance sheet components if available
                 if balance_data:

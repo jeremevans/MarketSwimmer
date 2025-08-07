@@ -24,7 +24,7 @@ Usage:
     results = calculator.calculate_owner_earnings()
 """
 
-__version__ = "2.4.1"
+__version__ = "2.5.0"
 __author__ = "Jeremy Evans"
 __email__ = "jeremyevans@hey.com"
 __license__ = "MIT"
