@@ -7,6 +7,11 @@ USER_GUIDE.md
 cleanup.ps1
 pyproject.toml
 setup.py
+charts/zion_earnings_components_breakdown.png
+charts/zion_owner_earnings_comparison.png
+charts/zion_volatility_analysis.png
+data/owner_earnings_annual_zion.csv
+data/owner_earnings_quarterly_zion.csv
 marketswimmer/__init__.py
 marketswimmer/__main__.py
 marketswimmer/cli.py

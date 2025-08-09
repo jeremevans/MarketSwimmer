@@ -823,16 +823,39 @@ class MarketSwimmerGUI(QMainWindow):
             try:
                 # Use the Python cleanup script
                 import shutil
+                import time
                 from pathlib import Path
                 
                 # Folders to remove
                 folders_to_remove = ["analysis_output", "charts", "data", "downloaded_files"]
                 
+                def remove_readonly(func, path, _):
+                    """Error handler for Windows readonly files"""
+                    import stat
+                    os.chmod(path, stat.S_IWRITE)
+                    func(path)
+                
                 for folder in folders_to_remove:
                     folder_path = Path(folder)
                     if folder_path.exists():
-                        shutil.rmtree(folder_path)
-                        self.console_output.append(f"   ✓ Removed {folder}/ folder")
+                        try:
+                            # Windows-safe removal with retry
+                            if os.name == 'nt':  # Windows
+                                shutil.rmtree(folder_path, onerror=remove_readonly)
+                            else:
+                                shutil.rmtree(folder_path)
+                            self.console_output.append(f"   ✓ Removed {folder}/ folder")
+                        except PermissionError:
+                            # Try alternative approach for Windows
+                            try:
+                                import subprocess
+                                subprocess.run(['rmdir', '/s', '/q', str(folder_path)], 
+                                             shell=True, check=False)
+                                self.console_output.append(f"   ✓ Removed {folder}/ folder (using rmdir)")
+                            except Exception as e2:
+                                self.console_output.append(f"   ❌ Could not remove {folder}/: {str(e2)}")
+                        except Exception as e:
+                            self.console_output.append(f"   ❌ Could not remove {folder}/: {str(e)}")
                     else:
                         self.console_output.append(f"   - {folder}/ folder not found")
                 

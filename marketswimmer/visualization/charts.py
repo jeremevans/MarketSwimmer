@@ -11,6 +11,42 @@ from datetime import datetime
 import os
 import glob
 import re
+import sys
+
+def is_bank_or_insurance(ticker):
+    """
+    Simple bank/insurance detection for visualization purposes.
+    Returns True if the company should exclude working capital from charts.
+    """
+    if not ticker:
+        return False
+        
+    ticker_upper = ticker.upper()
+    
+    # Known bank tickers
+    bank_keywords = [
+        'BANK', 'BANCORP', 'BANC', 'FINANCIAL', 'TRUST', 'CREDIT', 'SAVINGS',
+        'FARGO', 'CHASE', 'MORGAN', 'GOLDMAN', 'CITI', 'AMERICA'
+    ]
+    
+    # Insurance keywords
+    insurance_keywords = [
+        'INSURANCE', 'INSUR', 'LIFE', 'MUTUAL', 'ASSURANCE', 'REINSURANCE'
+    ]
+    
+    # Check ticker symbols
+    if any(keyword in ticker_upper for keyword in bank_keywords + insurance_keywords):
+        return True
+        
+    # Common bank/insurance tickers
+    financial_tickers = {
+        'JPM', 'BAC', 'WFC', 'C', 'GS', 'MS', 'USB', 'PNC', 'TFC', 'SCHW',
+        'BK', 'STT', 'NTRS', 'CFG', 'RF', 'KEY', 'FITB', 'HBAN', 'ZION',
+        'MTB', 'CMA', 'EWBC', 'SIVB', 'WAL', 'PBCT', 'BRK.B', 'BRK.A',
+        'AIG', 'PRU', 'MET', 'AFL', 'ALL', 'TRV', 'PGR', 'CB', 'AXP'
+    }
+    
+    return ticker_upper in financial_tickers
 
 def setup_plotting_style():
     """Set up a professional plotting style."""
@@ -1047,31 +1083,43 @@ def create_owner_earnings_comparison(annual_df, quarterly_df, ticker):
     plt.tight_layout()
     return fig
 
-def create_components_breakdown(annual_df, quarterly_df, ticker):
-    """Create waterfall charts showing the components of owner earnings."""
+def create_components_breakdown(annual_df, quarterly_df, ticker, exclude_working_capital=False):
+    """Create waterfall charts showing the components of owner earnings.
+    
+    Args:
+        annual_df: annual data DataFrame
+        quarterly_df: quarterly data DataFrame
+        ticker: company ticker symbol
+        exclude_working_capital: bool, if True excludes working capital (for banks/insurance)
+    """
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(15, 14))
     
     # Annual components waterfall
-    create_annual_waterfall_chart(ax1, annual_df, ticker)
+    create_annual_waterfall_chart(ax1, annual_df, ticker, exclude_working_capital)
     
     # Quarterly components (most recent 20 quarters for readability)
     # Since data is now sorted chronologically, get the last 20 quarters
     quarterly_recent = quarterly_df.tail(20).copy()
     
     # Create waterfall chart for quarterly data
-    create_waterfall_chart(ax2, quarterly_recent, ticker)
+    create_waterfall_chart(ax2, quarterly_recent, ticker, exclude_working_capital)
     
     # Rotate x-axis labels for better readability
     ax2.tick_params(axis='x', rotation=45)
     
     plt.tight_layout()
     return fig
-    
-    plt.tight_layout()
     return fig
 
-def create_annual_waterfall_chart(ax, df, ticker):
-    """Create a waterfall chart showing annual owner earnings components for all years."""
+def create_annual_waterfall_chart(ax, df, ticker, exclude_working_capital=False):
+    """Create a waterfall chart showing annual owner earnings components for all years.
+    
+    Args:
+        ax: matplotlib axis
+        df: dataframe with owner earnings data
+        ticker: company ticker symbol
+        exclude_working_capital: bool, if True excludes working capital (for banks/insurance)
+    """
     
     # Use all years instead of limiting to recent ones
     recent_years = df.copy()
@@ -1108,7 +1156,10 @@ def create_annual_waterfall_chart(ax, df, ticker):
         cumulative.append(net_income)
         cumulative.append(cumulative[-1] + depreciation)
         cumulative.append(cumulative[-1] + capex)
-        cumulative.append(cumulative[-1] + wc_change)
+        
+        # Only add working capital if not excluded (i.e., not a bank/insurance company)
+        if not exclude_working_capital:
+            cumulative.append(cumulative[-1] + wc_change)
         
         # X position for this year's bars
         x_base = i
@@ -1131,29 +1182,36 @@ def create_annual_waterfall_chart(ax, df, ticker):
                edgecolor='black', linewidth=0.3,
                label='- CapEx' if i == 0 else "")
         
-        # Working Capital Changes (can be positive or negative)
-        wc_color = colors['WC Changes'] if wc_change < 0 else '#90EE90'
-        ax.bar(x_base + bar_width, wc_change, bar_width,
-               bottom=cumulative[3], color=wc_color, alpha=0.8,
-               edgecolor='black', linewidth=0.3,
-               label='WC Changes' if i == 0 else "")
+        # Working Capital Changes (can be positive or negative) - only if not excluded
+        if not exclude_working_capital:
+            wc_color = colors['WC Changes'] if wc_change < 0 else '#90EE90'
+            ax.bar(x_base + bar_width, wc_change, bar_width,
+                   bottom=cumulative[3], color=wc_color, alpha=0.8,
+                   edgecolor='black', linewidth=0.3,
+                   label='WC Changes' if i == 0 else "")
+            oe_x_position = x_base + 2*bar_width
+        else:
+            # For banks/insurance, position Owner Earnings where WC would be
+            oe_x_position = x_base + bar_width
         
         # Owner Earnings (final result)
         oe_color = colors['Owner Earnings'] if owner_earnings >= 0 else '#F44336'
-        ax.bar(x_base + 2*bar_width, owner_earnings, bar_width,
+        ax.bar(oe_x_position, owner_earnings, bar_width,
                bottom=0, color=oe_color, alpha=0.8,
                edgecolor='black', linewidth=0.5,
                label='Owner Earnings' if i == 0 else "")
         
         # Add value labels for Owner Earnings (in billions for annual)
         oe_billions = owner_earnings / 1000
-        ax.text(x_base + 2*bar_width, owner_earnings/2, f'${oe_billions:.1f}B',
+        ax.text(oe_x_position, owner_earnings/2, f'${oe_billions:.1f}B',
                ha='center', va='center', fontweight='bold', fontsize=9, rotation=90)
         
         # Add connecting line to show the flow to final result
         if owner_earnings >= 0:
+            # Use the last cumulative value (different index depending on whether WC is excluded)
+            last_cumulative_index = 3 if exclude_working_capital else 4
             ax.plot([x_base + bar_width + bar_width/2, x_base + 2*bar_width - bar_width/2], 
-                   [cumulative[4], owner_earnings/2], 'k--', alpha=0.3, linewidth=1)
+                   [cumulative[last_cumulative_index], owner_earnings/2], 'k--', alpha=0.3, linewidth=1)
     
     # Formatting
     ax.set_xticks(year_positions)
@@ -1167,18 +1225,33 @@ def create_annual_waterfall_chart(ax, df, ticker):
         Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
         Patch(facecolor='#A23B72', alpha=0.8, label='+ Depreciation'),
         Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
-        Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
-        Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+    ]
+    
+    # Only add working capital legend elements if not excluded (i.e., not a bank/insurance)
+    if not exclude_working_capital:
+        legend_elements.extend([
+            Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
+            Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+        ])
+    
+    legend_elements.extend([
         Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings (+)'),
         Patch(facecolor='#F44336', alpha=0.8, label='Owner Earnings (-)')
-    ]
+    ])
     ax.legend(handles=legend_elements, loc='upper left', fontsize=10)
     
     ax.grid(True, alpha=0.3, axis='y')
     ax.axhline(y=0, color='black', linestyle='-', alpha=0.8)
 
-def create_waterfall_chart(ax, df, ticker):
-    """Create a waterfall chart showing owner earnings components for all quarters."""
+def create_waterfall_chart(ax, df, ticker, exclude_working_capital=False):
+    """Create a waterfall chart showing owner earnings components for all quarters.
+    
+    Args:
+        ax: matplotlib axis
+        df: dataframe with owner earnings data
+        ticker: company ticker symbol
+        exclude_working_capital: bool, if True excludes working capital (for banks/insurance)
+    """
     
     # Use all quarters instead of limiting to recent ones
     recent_quarters = df.copy()
@@ -1258,8 +1331,10 @@ def create_waterfall_chart(ax, df, ticker):
         
         # Add connecting line to show the flow to final result
         if owner_earnings >= 0:
+            # Use the last cumulative value (different index depending on whether WC is excluded)
+            last_cumulative_index = 3 if exclude_working_capital else 4
             ax.plot([x_base + bar_width + bar_width/2, x_base + 2*bar_width - bar_width/2], 
-                   [cumulative[4], owner_earnings/2], 'k--', alpha=0.3, linewidth=1)
+                   [cumulative[last_cumulative_index], owner_earnings/2], 'k--', alpha=0.3, linewidth=1)
     
     # Formatting
     ax.set_xticks(quarter_positions)
@@ -1287,11 +1362,19 @@ def create_waterfall_chart(ax, df, ticker):
         Patch(facecolor='#2E86AB', alpha=0.8, label='Net Income'),
         Patch(facecolor='#A23B72', alpha=0.8, label='+ Depreciation'),
         Patch(facecolor='#F18F01', alpha=0.8, label='- CapEx'),
-        Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
-        Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+    ]
+    
+    # Only add working capital legend elements if not excluded (i.e., not a bank/insurance)
+    if not exclude_working_capital:
+        legend_elements.extend([
+            Patch(facecolor='#C73E1D', alpha=0.8, label='WC Changes (-)'),
+            Patch(facecolor='#90EE90', alpha=0.8, label='WC Changes (+)'),
+        ])
+    
+    legend_elements.extend([
         Patch(facecolor='#4CAF50', alpha=0.8, label='Owner Earnings (+)'),
         Patch(facecolor='#F44336', alpha=0.8, label='Owner Earnings (-)')
-    ]
+    ])
     ax.legend(handles=legend_elements, loc='upper left', fontsize=9)
     
     ax.grid(True, alpha=0.3, axis='y')
@@ -1466,6 +1549,11 @@ def main(ticker=None):
     print(f"{ticker} Owner Earnings Visualization Tool")
     print("=" * 50)
     
+    # Detect if this is a bank or insurance company
+    is_financial = is_bank_or_insurance(ticker)
+    if is_financial:
+        print(f"[INFO] Detected {ticker} as bank/insurance - excluding working capital from charts")
+    
     # Set up plotting style
     setup_plotting_style()
     
@@ -1490,8 +1578,8 @@ def main(ticker=None):
     figures.append(fig1)
     filenames.append(f"{ticker.lower().replace('.', '')}_owner_earnings_comparison")
     
-    # 2. Components breakdown
-    fig2 = create_components_breakdown(annual_df, quarterly_df, ticker)
+    # 2. Components breakdown (exclude working capital for banks/insurance)
+    fig2 = create_components_breakdown(annual_df, quarterly_df, ticker, exclude_working_capital=is_financial)
     figures.append(fig2)
     filenames.append(f"{ticker.lower().replace('.', '')}_earnings_components_breakdown")
     
@@ -1517,4 +1605,8 @@ def main(ticker=None):
     print(f"Positive Quarters: {positive_quarters}/{total_quarters} ({positive_quarters/total_quarters*100:.1f}%)")
 
 if __name__ == "__main__":
-    main()
+    # Check for command line argument
+    ticker = None
+    if len(sys.argv) > 1:
+        ticker = sys.argv[1].upper()
+    main(ticker)

@@ -1,0 +1,111 @@
+MARKETSWIMMER ENHANCED FAIR VALUE ANALYSIS - ZION
+==================================================
+
+ALTERNATIVE OWNER EARNINGS METHODS:
+==================================================
+
+METHOD COMPARISON (10-Year Averages):
+Traditional              : $  1,587,066,000
+Operating Cash Flow      : $    716,700,000
+Free Cash Flow           : $    716,700,000
+
+METHODOLOGY EXPLANATION:
+1. Traditional Method: Net Income + Depreciation - CapEx - Working Capital Changes
+   - Warren Buffett's original formula
+   - Best for stable businesses with predictable working capital
+
+2. Operating Cash Flow Method: Operating Cash Flow - CapEx
+   - Alternative approach discussed by Buffett
+   - Uses actual cash flow from operations
+   - May be more accurate for businesses with volatile working capital
+
+3. Free Cash Flow Method: Operating Cash Flow - CapEx
+   - Standard financial analysis approach
+   - Widely used by analysts and investors
+
+Operating Cash Flow vs Traditional: -54.8% difference
+Large difference suggests reviewing working capital treatment
+
+FAIR VALUE USING ALTERNATIVE METHODS:
+Traditional Method Fair Value: $199.73 per share
+Operating Cash Flow Fair Value: $109.46 per share
+   Difference from Traditional: -45.2%
+
+BALANCE SHEET COMPONENTS:
+Cash & Short-term Investments: $9,978,000,000
+Total Debt: $4,782,000,000
+Preferred Stock: $66,000,000
+Preferred Shares Outstanding: 66,100
+Preferred Stock per Share: $998
+Common Shares Outstanding: 147,603,000
+
+BASE CASE VALUATION:
+Average Owner Earnings: $1,587,066,000
+Discount Rate: 6.50%
+Growth Rate: 0.0%
+Perpetuity Value: $24,416,400,000
+Equity Value: $29,480,400,000
+Fair Value per Share: $199.73
+
+
+SCENARIO ANALYSIS:
+    Scenario Growth Rate Discount Rate  Equity Value  Fair Value per Share
+Conservative        0.0%          6.0%  3.158110e+10            213.959743
+   Base Case        2.0%          4.5%  6.988229e+10            473.447645
+  Optimistic        4.0%          4.0%  8.765743e+10            593.872970
+ Pessimistic       -1.0%          7.0%  2.476994e+10            167.814623
+
+DETAILED SCENARIO BREAKDOWN:
+==================================================
+
+CONSERVATIVE SCENARIO (0.0% Growth, 6.0% Discount):
+Base Owner Earnings: $1,587,066,000
+Next Year Owner Earnings: $1,587,066,000
+Perpetuity Value: $26,451,100,000
+Plus: Cash & Investments: +$9,978,000,000
+Less: Total Debt: -$4,782,000,000
+Less: Preferred Stock: -$132,000,000
+Final Equity Value: $31,515,100,000
+Fair Value per Share: $213.51
+
+BASE CASE SCENARIO (2.0% Growth, 6.5% Discount):
+Base Owner Earnings: $1,587,066,000
+Next Year Owner Earnings: $1,618,807,320
+Perpetuity Value: $35,973,496,000
+Plus: Cash & Investments: +$9,978,000,000
+Less: Total Debt: -$4,782,000,000
+Less: Preferred Stock: -$132,000,000
+Final Equity Value: $41,037,496,000
+Fair Value per Share: $278.03
+
+OPTIMISTIC SCENARIO (2.0% Growth, 4.5% Discount):
+Base Owner Earnings: $1,587,066,000
+Next Year Owner Earnings: $1,618,807,320
+Perpetuity Value: $64,752,292,800
+Plus: Cash & Investments: +$9,978,000,000
+Less: Total Debt: -$4,782,000,000
+Less: Preferred Stock: -$132,000,000
+Final Equity Value: $69,816,292,800
+Fair Value per Share: $473.00
+
+PESSIMISTIC SCENARIO (-1.0% Growth, 7.0% Discount):
+Base Owner Earnings: $1,587,066,000
+Next Year Owner Earnings: $1,571,195,340
+Perpetuity Value: $19,639,941,750
+Plus: Cash & Investments: +$9,978,000,000
+Less: Total Debt: -$4,782,000,000
+Less: Preferred Stock: -$132,000,000
+Final Equity Value: $24,703,941,750
+Fair Value per Share: $167.37
+
+METHODOLOGY:
+1. Calculate 10-year average of Owner Earnings
+2. Apply growing perpetuity formula with discount rate
+3. Add cash and investments
+4. Subtract debt and preferred stock
+5. Calculate per-share fair value
+
+NOTES:
+- Preferred stock treated as debt-like obligation
+- Insurance company methodology excludes working capital changes
+- Balance sheet data from most recent quarter

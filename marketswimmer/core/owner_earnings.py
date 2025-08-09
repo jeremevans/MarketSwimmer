@@ -11,12 +11,14 @@ class OwnerEarningsCalculator:
     Owner Earnings = Net Income + Depreciation/Amortization - Capital Expenditures - Working Capital Changes
     """
     
-    def __init__(self, xlsx_file_path=None):
+    def __init__(self, xlsx_file_path=None, force_bank=False, force_insurance=False):
         """
         Initialize the calculator.
         
         Args:
             xlsx_file_path (str, optional): Path to the XLSX file with financial data
+            force_bank (bool, optional): Force treatment as bank financials
+            force_insurance (bool, optional): Force treatment as insurance financials
         """
         self.file_path = xlsx_file_path
         self.company_name = None
@@ -24,6 +26,8 @@ class OwnerEarningsCalculator:
         self.balance_sheet = None
         self.cash_flow = None
         self.owner_earnings_data = {}
+        self.force_bank = force_bank  # NEW: Flag to force bank treatment
+        self.force_insurance = force_insurance  # NEW: Flag to force insurance treatment
         
         # If file path provided, load immediately for backward compatibility
         if xlsx_file_path:
@@ -578,8 +582,8 @@ class OwnerEarningsCalculator:
             current_wc = working_capital_levels[current_year]
             previous_wc = working_capital_levels[previous_year]
             
-            # Change in working capital (increase is negative for cash flow)
-            wc_change = -(current_wc - previous_wc)  # Negative because increase uses cash
+            # Change in working capital (positive when working capital increases)
+            wc_change = (current_wc - previous_wc)  # Positive when working capital increases
             working_capital_changes[current_year] = wc_change
             
             print(f"   [YEAR] {current_year}: WC change from ${previous_wc:,.0f} to ${current_wc:,.0f} = ${wc_change:,.0f}")
@@ -807,29 +811,28 @@ class OwnerEarningsCalculator:
                 depreciation = self.owner_earnings_data.get('depreciation', {}).get(year, 0)
                 capex = self.owner_earnings_data.get('capex', {}).get(year, 0)
                 wc_change = self.owner_earnings_data.get('working_capital_change', {}).get(year, 0)
-                
-                # Calculate owner earnings with industry-specific adjustments
-                # Check if this appears to be an insurance company or bank based on working capital patterns
-                is_insurance_company = self._detect_insurance_company()
-                is_bank = self._detect_bank()
-                
-                if is_insurance_company:
-                    # For insurance companies, use simplified approach:
-                    # Owner Earnings ≈ Net Income + Depreciation - CapEx (ignore working capital changes)
-                    # Working capital changes for insurers reflect policy reserves and float, not operational cash flow
+
+                # Always use forced logic for banks/insurance if set
+                if self.force_bank or self.force_insurance:
                     owner_earnings_value = net_income + depreciation - abs(capex)
-                    print(f"   [INSURANCE] Using insurance company methodology (excluding working capital changes)")
-                elif is_bank:
-                    # For banks, use banking-specific approach:
-                    # Owner Earnings ≈ Net Income + Depreciation - CapEx (ignore working capital changes)
-                    # Working capital changes for banks reflect deposits/loans which are core business, not working capital
-                    owner_earnings_value = net_income + depreciation - abs(capex)
-                    print(f"   [BANK] Using banking methodology (excluding working capital changes)")
+                    if self.force_bank:
+                        print(f"   [BANK] Forced banking methodology (excluding working capital changes)")
+                    if self.force_insurance:
+                        print(f"   [INSURANCE] Forced insurance methodology (excluding working capital changes)")
                 else:
-                    # Traditional formula: Net Income + Depreciation - CapEx - Working Capital Increases
-                    # Fixed: Working capital changes should be subtracted when they increase (reduce cash flow)
-                    owner_earnings_value = net_income + depreciation - abs(capex) - wc_change
-                
+                    # Calculate owner earnings with industry-specific adjustments
+                    is_insurance_company = self._detect_insurance_company()
+                    is_bank = self._detect_bank()
+
+                    if is_insurance_company:
+                        owner_earnings_value = net_income + depreciation - abs(capex)
+                        print(f"   [INSURANCE] Using insurance company methodology (excluding working capital changes)")
+                    elif is_bank:
+                        owner_earnings_value = net_income + depreciation - abs(capex)
+                        print(f"   [BANK] Using banking methodology (excluding working capital changes)")
+                    else:
+                        owner_earnings_value = net_income + depreciation - abs(capex) - wc_change
+
                 owner_earnings[year] = {
                     'net_income': net_income,
                     'depreciation': depreciation,
@@ -837,7 +840,7 @@ class OwnerEarningsCalculator:
                     'working_capital_change': wc_change,
                     'owner_earnings': owner_earnings_value
                 }
-                
+
             except Exception as e:
                 print(f"[WARNING]  Error calculating owner earnings for {year}: {e}")
                 continue
@@ -1054,16 +1057,27 @@ class OwnerEarningsCalculator:
         if owner_earnings:
             df_data = []
             for year, data in owner_earnings.items():
+                # Always exclude working capital for banks/insurance in CSV, regardless of detection or flag
+                is_bank_or_insurance = self.force_bank or self.force_insurance
+                # Try to detect if the company is a bank or insurance if not forced
+                if not is_bank_or_insurance:
+                    try:
+                        is_bank_or_insurance = self._detect_bank() or self._detect_insurance_company()
+                    except Exception:
+                        is_bank_or_insurance = False
+                if is_bank_or_insurance:
+                    owner_earnings_value = data['net_income'] + data['depreciation'] - abs(data['capex'])
+                else:
+                    owner_earnings_value = data['net_income'] + data['depreciation'] - abs(data['capex']) - data['working_capital_change']
                 row = {
                     'Period': year,
                     'Net Income': data['net_income'],
                     'Depreciation': data['depreciation'],
                     'CapEx': data['capex'],
                     'Working Capital Change': data['working_capital_change'],
-                    'Owner Earnings': data['owner_earnings']
+                    'Owner Earnings': owner_earnings_value
                 }
                 df_data.append(row)
-            
             import pandas as pd
             return pd.DataFrame(df_data)
         else:
@@ -1083,16 +1097,26 @@ class OwnerEarningsCalculator:
         if owner_earnings:
             df_data = []
             for period, data in owner_earnings.items():
+                # Always exclude working capital for banks/insurance in CSV, regardless of detection or flag
+                is_bank_or_insurance = self.force_bank or self.force_insurance
+                if not is_bank_or_insurance:
+                    try:
+                        is_bank_or_insurance = self._detect_bank() or self._detect_insurance_company()
+                    except Exception:
+                        is_bank_or_insurance = False
+                if is_bank_or_insurance:
+                    owner_earnings_value = data['net_income'] + data['depreciation'] - abs(data['capex'])
+                else:
+                    owner_earnings_value = data['net_income'] + data['depreciation'] - abs(data['capex']) - data['working_capital_change']
                 row = {
-                    'Period': period,  # Keep the quarter format like "2024Q4"
+                    'Period': period,
                     'Net Income': data['net_income'],
                     'Depreciation': data['depreciation'],
                     'CapEx': data['capex'],
                     'Working Capital Change': data['working_capital_change'],
-                    'Owner Earnings': data['owner_earnings']
+                    'Owner Earnings': owner_earnings_value
                 }
                 df_data.append(row)
-            
             import pandas as pd
             return pd.DataFrame(df_data)
         else:
@@ -1273,3 +1297,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
